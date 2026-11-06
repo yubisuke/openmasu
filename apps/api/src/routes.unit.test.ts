@@ -75,8 +75,8 @@ describe("declarative API route security", () => {
         && ((route.handler === "admin_cost_backfills_preview" && route.auth === "admin_bearer")
           || (route.handler === "dashboard_cost_backfills_preview" && route.auth === "dashboard_session")))
       || (route.method === "POST" && route.capability === "administer"
-        && ((route.handler === "admin_metric_schedules_preview_replacement" && route.auth === "admin_bearer")
-          || (["dashboard_metric_schedules_preview_replacement", "dashboard_metric_schedules_preview_recommended", "dashboard_meanings_preview"].includes(route.handler)
+        && ((["admin_metric_schedules_preview_replacement", "admin_webhook_content_preview"].includes(route.handler) && route.auth === "admin_bearer")
+          || (["dashboard_metric_schedules_preview_replacement", "dashboard_metric_schedules_preview_recommended", "dashboard_meanings_preview", "dashboard_webhook_content_preview"].includes(route.handler)
             && route.auth === "dashboard_session")))
       || (route.method === "POST" && route.auth === "dashboard_session"
         && ((route.handler === "dashboard_comparison_submit" && route.capability === "read")
@@ -180,6 +180,14 @@ describe("declarative API route security", () => {
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-webhooks/webhook%3Aone/signing-keys/retire")?.handler, "admin_operator_webhooks_retire");
     assert.equal(matchRoute("POST", "/v1/admin/apps/app-a/operator-webhooks/webhook%3Aone/deletion-notifications")?.handler, "admin_operator_webhooks_deletion_notifications");
     assert.equal(matchRoute("GET", "/v1/admin/apps/app-a/operator-webhooks/webhook%3Aone/deletion-notifications"), undefined);
+    for (const [method, suffix, handler, mutates] of [
+      ["POST", "/content-preview", "admin_webhook_content_preview", false],
+      ["GET", "/webhook%3Aone/content-policy", "admin_webhook_content_read", false],
+      ["POST", "/webhook%3Aone/content-policy", "admin_webhook_content_activate", true],
+    ] as const) {
+      const route = matchRoute(method, `/v1/admin/apps/app-a/operator-webhooks${suffix}`)!;
+      assert.deepEqual([route.handler, route.capability, route.mutates], [handler, "administer", mutates]);
+    }
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-webhooks")?.handler, "dashboard_operator_webhooks_register");
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-webhooks/webhook%3Aone/disable")?.handler, "dashboard_operator_webhooks_disable");
     assert.equal(matchRoute("POST", "/dashboard/apps/app-a/operator-webhooks/webhook%3Aone/signing-keys")?.handler, "dashboard_operator_webhooks_rotate");

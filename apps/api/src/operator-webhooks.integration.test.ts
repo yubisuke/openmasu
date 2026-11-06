@@ -22,6 +22,10 @@ import { KeyedTokenBucket } from "./rate-limit.js";
 import { createRequestHandler } from "./router.js";
 import { signServerRequest } from "./server-auth.js";
 import { rotateOperatorWebhookSigningKey, retireOperatorWebhookSigningKey } from "./operator-webhooks-admin.js";
+import { previewWebhookContent } from "@openmasu/runtime/webhook-content";
+
+const reviewedPolicy = previewWebhookContent({ mode: "explicit_v1", custom_events: { synthetic_operator_callback: "synthetic_operator_callback" }, event_names: {}, share_money: true });
+const reviewedContent = { content_policy: reviewedPolicy.policy, preview_digest: reviewedPolicy.preview_digest };
 
 const run = randomBytes(6).toString("hex");
 const tenantId = `tenant-webhook-${run}`;
@@ -201,6 +205,84 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     rmSync(payloadRoot, { recursive: true, force: true });
   });
 
+  it("previews closed content without sending and retains admission-policy bytes across activation", async () => {
+    const base = `/v1/admin/apps/${appId}/operator-webhooks`;
+    const registered = await admin(base, { method: "POST", body: JSON.stringify({
+      endpoint_url: `${receiverOrigin}/content-policy`, events: ["custom_event", "purchase"],
+    }) });
+    assert.equal(registered.status, 201);
+    const destination = await registered.json() as { destination_id: string };
+    const policyPath = `${base}/${encodeURIComponent(destination.destination_id)}/content-policy`;
+    const rows = () => withTenant(pool, tenantId, async client => (await client.query<{
+      delivery_id: string; request_ref: string; request_digest: string; policy_revision: string;
+    }>(`SELECT delivery_id::text,request_ref,request_digest,policy_revision::text
+      FROM ephemeral.operator_webhook_deliveries WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3
+      ORDER BY delivery_id`, [tenantId, appId, destination.destination_id])).rows);
+    const definition = (name: string) => ({ mode: "explicit_v1", custom_events: { synthetic_operator_callback: name },
+      event_names: { custom_event: "receiver_event" }, share_money: false });
+    const preview = async (name: string) => {
+      const result = await admin(`${base}/content-preview`, { method: "POST", body: JSON.stringify({
+        policy: definition(name), events: ["custom_event", "purchase"],
+      }) });
+      assert.equal(result.status, 200);
+      return await result.json() as ReturnType<typeof previewWebhookContent>;
+    };
+    const first = await preview("receiver_first");
+    assert.equal(first.synthetic_only, true);
+    assert.doesNotMatch(JSON.stringify(first), /installation_id|record_id|secret|payload_ref|subject_ref|transaction_ref/);
+    assert.deepEqual(await rows(), []);
+    assert.equal(received.filter(row => row.path === "/content-policy").length, 0);
+    assert.equal((await admin(`${base}/content-preview`, { method: "POST", headers: { authorization: `Bearer ${operatorKey}` },
+      body: JSON.stringify({ policy: definition("receiver_first"), events: ["custom_event"] }) })).status, 403);
+    const initial = await (await admin(policyPath)).json();
+    assert.equal(initial.revisions[0].policy_revision, 1);
+    assert.equal(initial.revisions[0].definition.share_money, false);
+    assert.deepEqual(initial.revisions[0].definition.custom_events, {});
+    const ingest = async (suffix: string) => {
+      await new Promise(resolve => setTimeout(resolve, 5));
+      assert.equal((await submit(`event:content-${suffix}:${run}`, `installation:content-${suffix}:${run}`)).status, 202);
+      await processSdkInbox(pool, payloadStore, tenantId);
+      await discoverOperatorWebhookDeliveries(pool, payloadStore, tenantId);
+    };
+    await ingest("default-denied");
+    assert.deepEqual(await rows(), [], "new destinations do not send arbitrary custom keys");
+    const activate = (value: typeof first, expected_revision: number) => admin(policyPath, { method: "POST", body: JSON.stringify({
+      policy: value.policy, preview_digest: value.preview_digest, expected_revision,
+    }) });
+    assert.equal((await activate(first, 1)).status, 200);
+    await ingest("first");
+    const queued = await rows();
+    assert.equal(queued.length, 1, "activation never backfills a previously excluded key");
+    assert.equal(queued[0].policy_revision, "2");
+    const oldBytes = await payloadStore.read(queued[0].request_ref);
+    assert.equal(JSON.parse(oldBytes.toString()).event.details.event_key, "receiver_first");
+    assert.equal(JSON.parse(oldBytes.toString()).policy_revision, 2);
+    const second = await preview("receiver_second");
+    assert.equal((await activate(second, 2)).status, 200);
+    assert.equal((await activate(first, 1)).status, 409);
+    assert.deepEqual(await rows(), queued, "policy activation does not rewrite pending body or digest");
+    assert.deepEqual(await payloadStore.read(queued[0].request_ref), oldBytes);
+    await ingest("second");
+    const finalRows = await rows();
+    assert.equal(finalRows.length, 2);
+    assert.equal(finalRows[1].policy_revision, "3");
+    const newBytes = await payloadStore.read(finalRows[1].request_ref);
+    assert.equal(JSON.parse(newBytes.toString()).event.details.event_key, "receiver_second");
+    const history = await (await admin(policyPath)).json();
+    assert.deepEqual(history.revisions.map((row: { policy_revision: number }) => row.policy_revision), [3, 2, 1]);
+    assert.deepEqual(history.revisions[1].definition, first.policy);
+    const readOnly = await withTenant(readerPool, tenantId, client => client.query(
+      "SELECT definition FROM control.operator_webhook_content_revisions WHERE destination_id=$1", [destination.destination_id]));
+    assert.equal(readOnly.rowCount, 3);
+    await assert.rejects(withTenant(pool, tenantId, client => client.query(
+      "UPDATE control.operator_webhook_content_revisions SET definition=definition WHERE destination_id=$1", [destination.destination_id])));
+    await processOperatorWebhookDeliveries(pool, payloadStore, tenantId, {
+      enabled: true, destinationAllowlist: [receiverOrigin], allowSyntheticLoopback: true,
+    });
+    assert.deepEqual(received.filter(row => row.path === "/content-policy").map(row => row.body), [oldBytes, newBytes]);
+    assert.equal((await admin(`${base}/${encodeURIComponent(destination.destination_id)}/disable`, { method: "POST", body: "{}" })).status, 200);
+  });
+
   it("comparison notifications reuse durable signed delivery, deduplicate state, coalesce cooldown, and suppress mute and privacy", async () => {
     const scope = { tenantId,appId }, commandPath = `/v1/admin/apps/${appId}/comparisons`;
     const clock = (day:number,seconds=0) => new Date(Date.parse(`2026-10-${String(day).padStart(2,"0")}T00:00:00Z`)+seconds*1000);
@@ -303,6 +385,7 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
       body: JSON.stringify({
         endpoint_url: `${receiverOrigin}/deliver`,
         events: ["custom_event", "purchase"],
+        ...reviewedContent,
       }),
     });
     assert.equal(response.status, 201);
@@ -396,7 +479,7 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
   it("serializes an in-flight request before deletion recognition without deadlock", async () => {
     const destinationResponse = await admin(`/v1/admin/apps/${appId}/operator-webhooks`, {
       method: "POST",
-      body: JSON.stringify({ endpoint_url: `${receiverOrigin}/race`, events: ["custom_event"] }),
+      body: JSON.stringify({ endpoint_url: `${receiverOrigin}/race`, events: ["custom_event"], ...reviewedContent }),
     });
     assert.equal(destinationResponse.status, 201);
     const destination = await destinationResponse.json() as { destination_id: string };
@@ -509,7 +592,7 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
   it("disables a destination, suppresses its pending outbox, and purges its protected secret", async () => {
     const response = await admin(`/v1/admin/apps/${appId}/operator-webhooks`, {
       method: "POST",
-      body: JSON.stringify({ endpoint_url: `${receiverOrigin}/disabled`, events: ["custom_event"] }),
+      body: JSON.stringify({ endpoint_url: `${receiverOrigin}/disabled`, events: ["custom_event"], ...reviewedContent }),
     });
     assert.equal(response.status, 201);
     const destination = await response.json() as { destination_id: string; signing_secret: string };
@@ -631,7 +714,7 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
 
   it("pins queued signing revisions, keeps references stable, and suppresses expired or retired keys without requests", async () => {
     const response = await admin(`/v1/admin/apps/${appId}/operator-webhooks`, { method: "POST",
-      body: JSON.stringify({ endpoint_url: `${receiverOrigin}/rotation`, events: ["custom_event"] }) });
+      body: JSON.stringify({ endpoint_url: `${receiverOrigin}/rotation`, events: ["custom_event"], ...reviewedContent }) });
     assert.equal(response.status, 201);
     const destination = await response.json() as { destination_id: string; signing_revision: number; signing_secret: string };
     assert.equal(destination.signing_revision, 1);
@@ -752,7 +835,7 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     const destinationPath = `/v1/admin/apps/${appId}/operator-webhooks`;
     const register = async (path: string, enabled: boolean, targetAppId = appId) => {
       const response = await admin(`/v1/admin/apps/${targetAppId}/operator-webhooks`, { method: "POST", body: JSON.stringify({
-        endpoint_url: `${receiverOrigin}/${path}`, events: ["custom_event"], deletion_notifications: enabled }) });
+        endpoint_url: `${receiverOrigin}/${path}`, events: ["custom_event"], deletion_notifications: enabled, ...reviewedContent }) });
       assert.equal(response.status, 201);
       return response.json() as Promise<{ destination_id: string; signing_secret: string }>;
     };

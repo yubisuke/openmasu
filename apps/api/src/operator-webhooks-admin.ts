@@ -11,6 +11,7 @@ import {
 } from "@openmasu/runtime";
 import type { AdminIdentity } from "./admin-auth.js";
 import { webhookSigningRevision, listWebhookSigningRevisions } from "@openmasu/runtime/operator-webhook-signing";
+import { defaultWebhookContentPolicy, parseWebhookContentPolicy, webhookContentDigest } from "@openmasu/runtime/webhook-content";
 
 type AppIdentity = AdminIdentity & { readonly appId: string };
 
@@ -64,7 +65,10 @@ export async function registerOperatorWebhookDestination(options: Readonly<{
   lookup?: WebhookLookup;
   now?: Date;
 }>): Promise<OperatorWebhookDestination & { readonly signing_secret: string }> {
-  if (Object.keys(options.body).some(key => !["endpoint_url", "events", "purpose", "deletion_notifications"].includes(key))) throw Error("operator_webhook_fields_invalid");
+  if (Object.keys(options.body).some(key => !["endpoint_url", "events", "purpose", "deletion_notifications", "content_policy", "preview_digest"].includes(key))) throw Error("operator_webhook_fields_invalid");
+  const content = options.body.content_policy === undefined ? defaultWebhookContentPolicy : parseWebhookContentPolicy(options.body.content_policy);
+  const contentDigest = webhookContentDigest(content);
+  if (options.body.content_policy !== undefined && options.body.preview_digest !== contentDigest) throw Error("operator_webhook_content_preview_required");
   const deletionNotifications = options.body.deletion_notifications === undefined ? false : options.body.deletion_notifications;
   if (typeof deletionNotifications !== "boolean") throw Error("operator_webhook_deletion_notifications_invalid");
   if (options.body.purpose === "comparison_notifications" && deletionNotifications) throw Error("operator_webhook_deletion_notifications_invalid");
@@ -73,6 +77,7 @@ export async function registerOperatorWebhookDestination(options: Readonly<{
     lookup: options.lookup,
   });
   const comparisonOnly = options.body.purpose === "comparison_notifications";
+  if (comparisonOnly && options.body.content_policy !== undefined) throw Error("operator_webhook_content_comparison_only");
   if (options.body.purpose !== undefined && !comparisonOnly) throw Error("operator_webhook_purpose_invalid");
   if (comparisonOnly && options.body.events !== undefined && (!Array.isArray(options.body.events) || options.body.events.length !== 0)) throw Error("operator_webhook_events_invalid");
   const events = comparisonOnly ? [] : normalizeOperatorWebhookEvents(options.body.events);
@@ -111,6 +116,9 @@ export async function registerOperatorWebhookDestination(options: Readonly<{
          VALUES ($1,$2,$3,1,$4,$5,NULL)`,
         [options.identity.tenantId,options.identity.appId,destinationId,signingRef,createdAt],
       );
+      await client.query(`INSERT INTO control.operator_webhook_content_revisions
+        (tenant_id,app_id,destination_id,policy_revision,definition,definition_digest,created_at) VALUES ($1,$2,$3,1,$4::jsonb,$5,$6)`,
+      [options.identity.tenantId, options.identity.appId, destinationId, JSON.stringify(content), contentDigest, createdAt]);
       await client.query(
         `INSERT INTO control.operator_webhook_destination_states (
            destination_id,tenant_id,app_id,status,changed_at,artifact,deletion_notifications

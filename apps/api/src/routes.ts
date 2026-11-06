@@ -2,6 +2,12 @@ export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "privacy_receip
 export type RouteCapability = "read" | "operate" | "administer";
 
 export type RouteHandler =
+  | "admin_webhook_content_preview"
+  | "admin_webhook_content_read"
+  | "admin_webhook_content_activate"
+  | "dashboard_webhook_content_read"
+  | "dashboard_webhook_content_preview"
+  | "dashboard_webhook_content_activate"
   | "dashboard_subscriptions"
   | "admin_subscriptions"
   | "dashboard_imports_list"
@@ -252,6 +258,12 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "admin_server_keys_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/server-keys$/, auth: "admin_bearer", mutates: false, capability: "administer" },
   { handler: "admin_server_keys_issue", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/server-keys$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_server_keys_retire", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/server-keys\/[^/]+\/retire$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_webhook_content_preview", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks\/content-preview$/, auth: "admin_bearer", mutates: false, capability: "administer" },
+  { handler: "admin_webhook_content_read", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks\/[^/]+\/content-policy$/, auth: "admin_bearer", mutates: false, capability: "administer" },
+  { handler: "admin_webhook_content_activate", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks\/[^/]+\/content-policy$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "dashboard_webhook_content_read", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/operator-webhooks\/[^/]+\/content-policy$/, auth: "dashboard_session", mutates: false, capability: "administer" },
+  { handler: "dashboard_webhook_content_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-webhooks\/[^/]+\/content-policy\/preview$/, auth: "dashboard_session", mutates: false, capability: "administer" },
+  { handler: "dashboard_webhook_content_activate", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-webhooks\/[^/]+\/content-policy$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "admin_operator_webhooks_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks$/, auth: "admin_bearer", mutates: false, capability: "administer" },
   { handler: "admin_operator_webhooks_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   { handler: "admin_operator_webhooks_disable", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhooks\/[^/]+\/disable$/, auth: "admin_bearer", mutates: true, capability: "administer" },

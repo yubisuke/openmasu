@@ -5,6 +5,7 @@ import type { LookupFunction } from "node:net";
 import type { Pool, PoolClient } from "pg";
 import { comparisonNotificationEligible, lockComparisonNotifications } from "@openmasu/runtime/recurring-comparisons";
 import { webhookSigningRevision } from "@openmasu/runtime/operator-webhook-signing";
+import { applyWebhookContent, type StoredWebhookContentPolicy } from "@openmasu/runtime/webhook-content";
 import { recognizedWebhookDeletion } from "./operator-webhook-deletions.js";
 import {
   operatorWebhookReference,
@@ -22,6 +23,8 @@ type JsonValue = string | number | boolean | null | JsonObject | readonly JsonVa
 type JsonObject = { readonly [key: string]: JsonValue };
 
 export type OperatorWebhookCandidate = {
+  content_policy?: StoredWebhookContentPolicy;
+  policy_revision?: number;
   destination_id: string;
   endpoint_url: string;
   secret_ref: string;
@@ -44,6 +47,7 @@ export type OperatorWebhookCandidate = {
 };
 
 type DeliveryRow = {
+  policy_revision: string | null;
   delivery_id: string;
   destination_id: string;
   endpoint_url: string;
@@ -67,7 +71,7 @@ type DeliveryRow = {
 };
 
 export type OperatorEvent = Readonly<{
-  name: OperatorWebhookEventName;
+  name: string;
   event_ref: string;
   occurred_at: string;
   subject_ref?: string;
@@ -76,6 +80,7 @@ export type OperatorEvent = Readonly<{
 
 export type OperatorWebhookEnvelope = Readonly<{
   schema: "openmasu.operator_event.v1";
+  policy_revision?: number;
   delivery_id: string;
   emitted_at: string;
   app_id: string;
@@ -166,12 +171,15 @@ export function buildOperatorWebhookRequest(input: Readonly<{
   emittedAt: string;
   secret: Buffer;
 }>): PreparedOperatorWebhook {
+  const event = applyWebhookContent(buildOperatorEvent(input.candidate, input.secret), input.candidate.content_policy ?? { mode: "legacy_v1" });
+  if (!event) throw Error("operator_webhook_content_filtered");
   const envelope: OperatorWebhookEnvelope = {
     schema: "openmasu.operator_event.v1",
     delivery_id: input.deliveryId,
     emitted_at: input.emittedAt,
     app_id: input.candidate.app_id,
-    event: buildOperatorEvent(input.candidate, input.secret),
+    event,
+    ...(input.candidate.content_policy?.mode === "explicit_v1" ? { policy_revision: input.candidate.policy_revision } : {}),
   };
   const body = Buffer.from(JSON.stringify(envelope), "utf8");
   return {
@@ -280,7 +288,7 @@ async function lockDestination(
 
 async function appendResult(
   client: PoolClient,
-  row: Pick<DeliveryRow, "delivery_id" | "destination_id" | "app_id" | "request_digest" | "signing_revision">,
+  row: Pick<DeliveryRow, "delivery_id" | "destination_id" | "app_id" | "request_digest" | "signing_revision" | "policy_revision">,
   tenantId: string,
   state: "retry" | "succeeded" | "failed" | "suppressed",
   attempt: number,
@@ -298,6 +306,7 @@ async function appendResult(
     occurred_at: occurredAt,
     request_digest: row.request_digest,
     signing_revision: Number(row.signing_revision),
+    ...(row.policy_revision ? { policy_revision: Number(row.policy_revision) } : {}),
     ...(httpStatus ? { http_status: httpStatus } : {}),
     ...(reason ? { reason_code: reason } : {}),
   };
@@ -320,6 +329,7 @@ export async function discoverOperatorWebhookDeliveries(
 ): Promise<number> {
   const candidates = await withTenant(pool, tenantId, (client) => client.query<OperatorWebhookCandidate>(
     `SELECT destination.destination_id,destination.endpoint_url,destination.secret_ref,
+            policy.definition AS content_policy,policy.policy_revision::integer,
             logical.logical_event_id,logical.record_id,logical.app_id,logical.event_name,
             COALESCE(session.occurred_at,purchase.occurred_at,refund.occurred_at,
                      revenue.occurred_at,raw.occurred_at) AS occurred_at,
@@ -338,6 +348,9 @@ export async function discoverOperatorWebhookDeliveries(
         AND logical.event_name=ANY(destination.allowed_events)
        JOIN ledger.raw_records_current AS raw
          ON raw.tenant_id=logical.tenant_id AND raw.app_id=logical.app_id AND raw.record_id=logical.record_id
+       LEFT JOIN LATERAL (SELECT definition,policy_revision FROM control.operator_webhook_content_revisions
+         WHERE tenant_id=destination.tenant_id AND app_id=destination.app_id AND destination_id=destination.destination_id
+           AND created_at<=raw.received_at ORDER BY policy_revision DESC LIMIT 1) policy ON true
        LEFT JOIN ledger.session_facts AS session
          ON session.tenant_id=logical.tenant_id AND session.app_id=logical.app_id
         AND session.logical_event_id=logical.logical_event_id AND logical.event_name='session_start'
@@ -354,6 +367,8 @@ export async function discoverOperatorWebhookDeliveries(
          ON revenue.tenant_id=logical.tenant_id AND revenue.app_id=logical.app_id
         AND revenue.logical_event_id=logical.logical_event_id AND logical.event_name='ad_revenue'
       WHERE destination.tenant_id=$1 AND destination.status='active'
+        AND (policy.policy_revision IS NULL OR policy.definition->>'mode'='legacy_v1'
+          OR logical.event_name<>'custom_event' OR policy.definition->'custom_events' ? custom.event_key)
         AND raw.received_at_ts >= control.canonical_timestamp_value(destination.created_at)
         AND logical.record_lifecycle='active'
         AND raw.payload_lifecycle_status='available'
@@ -392,6 +407,9 @@ export async function discoverOperatorWebhookDeliveries(
         await lockDestination(client, tenantId, candidate.app_id, candidate.destination_id);
         const eligible = await client.query<{ eligible: boolean }>(
           `SELECT destination.status='active'
+                  AND (SELECT policy_revision FROM control.operator_webhook_content_revisions
+                    WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3 AND created_at<=raw.received_at
+                    ORDER BY policy_revision DESC LIMIT 1) IS NOT DISTINCT FROM $5::bigint
                   AND raw.payload_lifecycle_status='available'
                   AND raw.withdrawal_recognized_at IS NULL
                   AND NOT EXISTS (SELECT 1 FROM ledger.privacy_tombstones AS tombstone
@@ -403,7 +421,7 @@ export async function discoverOperatorWebhookDeliveries(
              JOIN ledger.raw_records_current AS raw
                ON raw.tenant_id=$1 AND raw.app_id=$2 AND raw.record_id=$4
             WHERE base.tenant_id=$1 AND base.app_id=$2 AND base.destination_id=$3`,
-          [tenantId, candidate.app_id, candidate.destination_id, candidate.record_id],
+          [tenantId, candidate.app_id, candidate.destination_id, candidate.record_id, candidate.policy_revision ?? null],
         );
         if (!eligible.rows[0]?.eligible) return false;
         const signing = await webhookSigningRevision(client, { tenantId, appId: candidate.app_id },
@@ -412,12 +430,12 @@ export async function discoverOperatorWebhookDeliveries(
         const result = await client.query(
           `INSERT INTO ephemeral.operator_webhook_deliveries (
              delivery_id,tenant_id,app_id,destination_id,logical_event_id,record_id,event_name,
-             request_ref,request_digest,state,attempts,next_attempt_at,created_at,updated_at,signing_revision,subject_ref
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'queued',0,$10,$11,$12,$13,$14)
+             request_ref,request_digest,state,attempts,next_attempt_at,created_at,updated_at,signing_revision,subject_ref,policy_revision
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'queued',0,$10,$11,$12,$13,$14,$15)
            ON CONFLICT (tenant_id,app_id,destination_id,logical_event_id) DO NOTHING`,
           [deliveryId, tenantId, candidate.app_id, candidate.destination_id, candidate.logical_event_id,
             candidate.record_id, candidate.event_name, requestRef, prepared.requestDigest,
-            now.toISOString(), now.toISOString(), now.toISOString(), signing.signing_revision, prepared.envelope.event.subject_ref ?? null],
+            now.toISOString(), now.toISOString(), now.toISOString(), signing.signing_revision, prepared.envelope.event.subject_ref ?? null, candidate.policy_revision ?? null],
         );
         return result.rowCount === 1;
       });
@@ -483,7 +501,7 @@ export async function processOperatorWebhookDeliveries(
       const attemptAt = options.now?.() ?? new Date();
       const selected = await client.query<DeliveryRow>(
         `SELECT delivery.delivery_id::text,delivery.destination_id,destination.endpoint_url,
-                delivery.signing_revision::text,delivery.app_id,delivery.record_id,delivery.comparison_id,delivery.request_ref,
+                delivery.signing_revision::text,delivery.policy_revision::text,delivery.app_id,delivery.record_id,delivery.comparison_id,delivery.request_ref,
                 delivery.event_name,delivery.subject_ref,delivery.privacy_request_id,destination.deletion_notifications,
                 delivery.request_digest,delivery.state,delivery.attempts,delivery.created_at,
                 destination.status AS destination_status,

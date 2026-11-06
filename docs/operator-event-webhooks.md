@@ -34,6 +34,7 @@ The JSON envelope is closed:
   "delivery_id": "018f0000-0000-7000-8000-000000000001",
   "emitted_at": "2026-08-30T00:00:01.000Z",
   "app_id": "app-synthetic",
+  "policy_revision": 2,
   "event": {
     "name": "custom_event",
     "event_ref": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -58,8 +59,8 @@ Event details are limited to the fields needed for that event class:
 | --- | --- |
 | `session_start` | empty object |
 | `custom_event` | `event_key` |
-| `purchase` / `refund` | exact integer money, currency, optional financial status, optional destination-scoped transaction reference |
-| `ad_revenue` | exact integer money, currency, revenue source, and optional bounded network/country dimensions |
+| `purchase` / `refund` | optional financial status and destination-scoped transaction reference; exact integer money and currency only when shared |
+| `ad_revenue` | revenue source and optional bounded network/country dimensions; exact integer money and currency only when shared |
 
 ## Enable a synthetic or private deployment
 
@@ -186,6 +187,84 @@ signing revision, the immutable reference key, and pending request bodies. It
 cannot be re-enabled. Repeating disable does not append another lifecycle state;
 it permits cleanup to be retried after an interrupted post-commit purge.
 Disablement is audited without logging the secret or request body.
+
+## Preview and activate a content policy
+
+New destinations start with an empty custom-key allowlist and money sharing
+**off**. Selecting `custom_event` alone sends no custom events. Selected purchase,
+refund and ad-revenue events omit `amount_unscaled`, `amount_scale` and `currency`
+until the administrator explicitly enables sharing. Other closed fields remain;
+this is not a general-purpose payload template or an arbitrary attribute export.
+
+On the app dashboard, choose **Preview / configure content**, enter custom-key
+pairs (`source_key=receiver_key`, one per line), optionally map event-class names,
+and review the synthetic send/exclude table before activating. No JavaScript or
+provider call is involved. Equivalent API preview:
+
+```http
+POST /v1/admin/apps/app-synthetic/operator-webhooks/content-preview
+Authorization: Bearer <tenant-admin-key>
+Content-Type: application/json
+
+{
+  "events": ["custom_event", "purchase"],
+  "policy": {
+    "mode": "explicit_v1",
+    "custom_events": {"synthetic_example": "receiver_example"},
+    "event_names": {"purchase": "order_completed"},
+    "share_money": false
+  }
+}
+```
+
+The response contains the normalized `policy`, its `preview_digest`, and synthetic
+examples of selected and excluded events. Examples show the final `name` and
+`details` transformation, not a full delivery envelope: raw identifiers, secrets,
+destination references and real ledger values are absent. Preview writes neither
+an outbox entry nor an activation. The digest acknowledges the exact definition;
+it is not a durable proof of human review.
+
+```http
+GET /v1/admin/apps/app-synthetic/operator-webhooks/<destination-id>/content-policy
+Authorization: Bearer <tenant-admin-key>
+
+POST /v1/admin/apps/app-synthetic/operator-webhooks/<destination-id>/content-policy
+Authorization: Bearer <tenant-admin-key>
+Content-Type: application/json
+
+{"expected_revision": 1, "policy": "<the policy object returned above>", "preview_digest": "<returned digest>"}
+```
+
+Replace the illustrative `policy` string with the returned JSON object. Activation
+requires the current `expected_revision` and matching digest; a stale revision
+returns `409`. Each activation appends an immutable definition, digest, timestamp
+and audit entry. The read route and dashboard expose the latest 50 revisions;
+older definitions remain in the append-only table. These operations are
+administrator-only and app-scoped. The registration API can alternatively accept
+`content_policy` and its `preview_digest` together for an already-previewed initial
+definition. Comparison-only destinations do not use this policy.
+
+At most 20 custom keys are allowed. Keys and receiver names must match
+`^[a-z][a-z0-9_]{0,63}$`. Name mapping accepts only the five supported source
+classes. Duplicate mapped custom names or colliding effective class names are
+rejected. Renaming does not change the source event's authority or money semantics.
+
+The worker selects the revision effective at the event's server `received_at`,
+not at dispatch time. A newly allowed key does not backfill previously excluded
+events. Explicit-policy envelopes include `policy_revision`; queued bytes, digest,
+delivery ID and signing revision never change when a successor is activated.
+Delivery results retain the content revision after the encrypted body is purged.
+Content revision numbers are independent of signing-key revisions. To stop
+already queued content, disable the destination; a narrower successor alone
+does not recall it.
+
+**Upgrade compatibility:** existing destinations receive an immutable
+`legacy_v1` revision preserving all previously selected custom keys, money fields
+and original envelope bytes (no new `policy_revision` field). Existing outbox
+entries remain unchanged. The UI identifies legacy behavior; switching requires
+an explicit preview and activation, and applies only to newly received events.
+Public registration/activation cannot request `legacy_v1`. Subject-deletion and
+aggregate-comparison notifications retain their separate closed envelopes.
 
 ## Verify a request
 

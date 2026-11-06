@@ -17,6 +17,7 @@ import { createEventCatalogControllers } from "./event-catalog.js";
 import { createImportMappingsControllers } from "./import-mappings.js";
 import { createImportsControllers } from "./imports.js";
 import { createAppleMeaningsControllers } from "./apple-meanings.js";
+import { createWebhookContentControllers } from "./webhook-content.js";
 
 export type HandlerRegistry = Readonly<Record<RouteHandler, RegisteredController>>;
 
@@ -38,6 +39,7 @@ export function assertHandlerRegistry(registry: Readonly<Partial<Record<RouteHan
 
 export function createHandlerRegistry(dependencies: RequestHandlerDependencies): HandlerRegistry {
   const registry = {
+    ...createWebhookContentControllers({ pool: dependencies.pool, dashboard: dependencies.dashboard }),
     ...createAppleMeaningsControllers({pool:dependencies.pool,dashboard:dependencies.dashboard}),
     ...createImportMappingsControllers({ payloadStore: dependencies.payloadStore }),
     ...createImportsControllers({ pool:dependencies.pool,readerPool:dependencies.readerPool,dashboard:dependencies.dashboard,payloadStore:dependencies.payloadStore }),

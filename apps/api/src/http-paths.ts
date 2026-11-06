@@ -48,7 +48,7 @@ export function serverKeyId(pathname: string): string | undefined {
 }
 
 export function operatorWebhookDestinationId(pathname: string): string | undefined {
-  return decodedPathPart(pathname, /\/operator-webhooks\/([^/]+)\/(?:disable|deletion-notifications|signing-keys(?:\/retire)?)$/);
+  return decodedPathPart(pathname, /\/operator-webhooks\/([^/]+)\/(?:content-policy(?:\/preview)?|disable|deletion-notifications|signing-keys(?:\/retire)?)$/);
 }
 
 export function operatorBulkExportDestinationId(pathname: string): string | undefined {

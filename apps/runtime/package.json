@@ -5,6 +5,7 @@
   "description": "OpenMasu PostgreSQL runtime and migration tooling",
   "type": "module",
   "exports": {
+    "./webhook-content": "./src/webhook-content.ts",
     "./managed-imports": "./src/managed-imports.ts",
     "./cohort-comparison": "./src/cohort-comparison.ts",
     "./comparison-model": "./src/comparison-model.ts",
