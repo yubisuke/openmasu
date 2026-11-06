@@ -22,7 +22,7 @@ import { validDatedFxPolicy, canonicalDatedFxPolicy, ACQUISITION_KPI_VERSION } f
 import { syntheticAcquisitionKpiCases, acquisitionKpiExpected } from "./synthetic-acquisition-kpi-cases.js";
 import { syntheticBasisAcquisitionKpiCases, basisAcquisitionKpiFixtureValues } from "./synthetic-basis-acquisition-kpi-cases.js";
 import { syntheticAcquisitionHorizonCases, acquisitionHorizonFixtureValues } from "./synthetic-acquisition-horizon-cases.js";
-import { syntheticPayerCases } from "./synthetic-payer-cases.js";
+import { syntheticPayerCases, syntheticPayerCohortCases } from "./synthetic-payer-cases.js";
 import { syntheticOutcomeCostCases } from "./synthetic-outcome-cost-cases.js";
 import { PAYER_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 
@@ -2441,6 +2441,20 @@ if (!summaryOnly) {
       for (const [index, entry] of cases.entries()) {
         const output = evaluate(entry.input);
         const values = PAYER_METRIC_DEFINITIONS.map(definition => {
+          const row = output.metric_runs.find(run => run.metric_name === definition.metric_name)!;
+          return row.value_unscaled ?? row.undefined_reason;
+        });
+        check(equal(values, entry.expected), `${entry.name}: independent arithmetic`);
+        check(equal(output, python[index]), `${entry.name}: full independent artifact parity`);
+      }
+    });
+    it("payer_cohort_profiles_keep_fraud_population_basis_refunds_FX_and_privacy_in_independent_TS_Python_parity", () => {
+      const cases = syntheticPayerCohortCases(fixture("62-explicit-refund-reversal").input,
+        fixture("66-verified-platform-acquisition").input);
+      const python = pythonOutputs(cases.map(entry => entry.input));
+      for (const [index, entry] of cases.entries()) {
+        const output = evaluate(entry.input);
+        const values = entry.input.metric_definitions.map((definition: Any) => {
           const row = output.metric_runs.find(run => run.metric_name === definition.metric_name)!;
           return row.value_unscaled ?? row.undefined_reason;
         });

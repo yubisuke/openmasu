@@ -106,8 +106,10 @@ export function comparisonMeaning(context: MetricComparisonContext) {
       profile: context.profile, anchor_event: "install", time_zone: "UTC", calculation,
       numerator: d.definition.numerator, denominator: d.definition.denominator ?? null,
       cost_basis: null, aggregation: "cumulative", window: { ...window, boundary: "half_open" },
-      population: "native_cohort_verified_settled_store_projections", acquisition_basis: d.acquisition_basis,
-      cost_selection_policy: "not_applicable", fraud_policy: "gross",
+      population: d.acquisition_basis === "selected_verified_platform"
+        ? "platform_cohort_verified_settled_store_projections" : "native_cohort_verified_settled_store_projections",
+      acquisition_basis: d.acquisition_basis,
+      cost_selection_policy: "not_applicable", fraud_policy: d.fraud_policy,
       grouping_dimensions: [...d.grouping_dimensions!].sort(), privacy_state: context.privacy_state,
       payer_identity: "tenant_app_installation_not_person", refunded_payer: "retained_historical_purchase",
       refund_reversal_policy: d.refund_reversal_policy, value_type: d.value_type,

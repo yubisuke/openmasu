@@ -1347,7 +1347,10 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
             or definition.get("definition", {}).get("calculation") in {row[0] for row in payer_rows.values()}
             or definition.get("definition", {}).get("numerator") in ("purchases", "paying_installations")
             or definition.get("definition", {}).get("denominator") == "paying_installations"):
-        row = payer_rows.get(definition.get("metric_name"))
+        name = definition.get("metric_name", "")
+        profile = next((suffix for suffix in ("native_fraud_net", "platform_gross", "platform_fraud_net")
+                        if name.endswith("_" + suffix)), None)
+        row = payer_rows.get(name[:-(len(profile) + 1)] if profile else name)
         if row is None:
             raise ValueError("payer_metric_unknown")
         calculation, numerator, value_type, denominator = row
@@ -1361,6 +1364,11 @@ def validate_metric_definition_series(definition: dict[str, Any]) -> None:
             "rule_bundle_id": "metric-verified-payers", "rule_bundle_version": "0.4.26",
             "rule_bundle_hash": "a9574eb2d767e0fe816b5861f7dd88e885c30aa799b0d0511ce115d6f81e3b52",
         }
+        if profile:
+            expected.update(metric_definition_version="0.4.35", rule_bundle_version="0.4.35",
+                rule_bundle_hash="d2072d075d3c89f840d182979a0380d5921ef3afc2bcd08ef2fd1bf275a02c26",
+                acquisition_basis="selected_first_party_click" if profile == "native_fraud_net" else "selected_verified_platform",
+                fraud_policy="gross" if profile == "platform_gross" else "net")
         if denominator is not None:
             expected["definition"]["denominator"] = denominator
         if value_type == "ratio":
