@@ -157,6 +157,9 @@ jobs:
         with:
           name: runtime-image-archive
           path: build/runtime-artifact/
+          # Only the committed public .env.example is copied into this bundle;
+          # generated pilot .env and secrets stay in separate temporary paths.
+          include-hidden-files: true
           if-no-files-found: error
       - name: Upload synthetic runtime pilot evidence
         if: always() && steps.scope.outputs.run_runtime == 'true'
