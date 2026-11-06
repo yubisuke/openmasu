@@ -14,6 +14,13 @@ import {
 } from "./routes.js";
 
 describe("declarative API route security", () => {
+  it("keeps meaning configuration reads and preview read-only, with administrator-only registration", () => {
+    for(const [method,suffix,capability,mutates] of [["GET","","read",false],["GET","/view","read",false],
+      ["GET","/bundle","read",false],["POST","/preview","administer",false],["POST","","administer",true]] as const) {
+      const route=matchRoute(method,`/dashboard/apps/app-a/conversion-meanings${suffix}`)!;
+      assert.deepEqual([route.auth,route.capability,route.mutates],["dashboard_session",capability,mutates]);
+    }
+  });
   it("keeps CSV uploads and confirmation behind scoped dashboard roles", () => {
     for (const [method, suffix, handler, capability, mutates] of [
       ["GET", "", "dashboard_imports_list", "read", false],
@@ -69,7 +76,7 @@ describe("declarative API route security", () => {
           || (route.handler === "dashboard_cost_backfills_preview" && route.auth === "dashboard_session")))
       || (route.method === "POST" && route.capability === "administer"
         && ((route.handler === "admin_metric_schedules_preview_replacement" && route.auth === "admin_bearer")
-          || (["dashboard_metric_schedules_preview_replacement", "dashboard_metric_schedules_preview_recommended"].includes(route.handler)
+          || (["dashboard_metric_schedules_preview_replacement", "dashboard_metric_schedules_preview_recommended", "dashboard_meanings_preview"].includes(route.handler)
             && route.auth === "dashboard_session")))
       || (route.method === "POST" && route.auth === "dashboard_session"
         && ((route.handler === "dashboard_comparison_submit" && route.capability === "read")

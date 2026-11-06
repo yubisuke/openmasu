@@ -22,6 +22,8 @@ import { KeyedTokenBucket } from "./rate-limit.js";
 import { createRequestHandler } from "./router.js";
 import type { ApplePostbackReport } from "./apple-postback-reporting.js";
 import { renderApplePostbackReport } from "./dashboard/apple-postback-report.js";
+import { conversionMeaningBundle, meaningFormValues } from "./apple-meaning-configuration.js";
+import { csrfToken } from "./session.js";
 
 const run = randomBytes(6).toString("hex");
 const tenantA = `tenant-m4-a-${run}`;
@@ -506,6 +508,62 @@ describe("M4 Apple aggregate postback receiver", () => {
     [`privacy-apple-app-${run}`, tenantA, appA]));
     const deleted = await read();
     assert.deepEqual([deleted.observations, deleted.receipts, deleted.deliveries, deleted.quota_rejections], [[], [], [], []], "current deletion applies even at a pre-deletion cutoff");
+  });
+
+  it("Issue 361 previews without writes, registers exact form meanings and exports immutable SDK bytes under scoped roles", async () => {
+    const {definition:original}=JSON.parse(readFileSync("sdk/ios/Tests/OpenMasuApplePostbackTests/Vectors/meaning.json","utf8"));
+    const definition={...original,schema_version:"3.0.0"}, bundle=conversionMeaningBundle(definition);
+    const base=`${baseUrl}/dashboard/apps/${appA}/conversion-meanings`;
+    const login=async(secret:string)=>{
+      const response=await fetch(`${baseUrl}/dashboard/session`,{method:"POST",redirect:"manual",body:new URLSearchParams({admin_key:secret})});
+      assert.equal(response.status,303);const cookie=response.headers.get("set-cookie")!.split(";",1)[0];
+      return {cookie,csrf:csrfToken(cookie.slice(cookie.indexOf("=")+1))};
+    };
+    const admin=await login(adminSecret),reader=await login(readerSecret);
+    const form=new URLSearchParams({...meaningFormValues(definition),csrf_token:admin.csrf});
+    const post=(suffix:string,body:URLSearchParams,identity=admin,origin="http://localhost:8080")=>fetch(`${base}${suffix}`,{
+      method:"POST",redirect:"manual",headers:{cookie:identity.cookie,origin},body});
+    const state=()=>withTenant(pool,tenantA,async client=>({
+      definitions:(await client.query("SELECT schema_version,schema_digest,definition FROM control.conversion_schemas WHERE tenant_id=$1 AND app_id=$2 ORDER BY schema_version",[tenantA,appA])).rows,
+      audits:(await client.query("SELECT count(*)::int AS count FROM ledger.audit_logs WHERE tenant_id=$1 AND app_id=$2",[tenantA,appA])).rows[0].count,
+    }));
+    const before=await state();
+    const preview=await post("/preview",form);assert.equal(preview.status,200);
+    const html=await preview.text();assert.equal((html.match(/data-fine="\d+"/g)??[]).length,64);
+    assert.match(html,/Postback binding: unverified/);assert.ok(html.includes(bundle.schema_digest));
+    assert.deepEqual(await state(),before,"successful preview writes no definition or audit");
+    const readerPage=await fetch(base,{headers:{cookie:reader.cookie}});assert.equal(readerPage.status,200);assert.doesNotMatch(await readerPage.text(),/method="post"/);
+    const invalid=new URLSearchParams(form);invalid.set("thresholds","0,100,100");assert.equal((await post("/preview",invalid)).status,400);
+    invalid.set("thresholds","0,1,2,3,4,5,6,7,8");assert.equal((await post("/preview",invalid)).status,400);
+    assert.deepEqual(await state(),before,"invalid preview cannot register");
+    const confirm=new URLSearchParams(form);confirm.set("preview_digest",bundle.schema_digest);
+    const changed=new URLSearchParams(confirm);changed.set("currency","EUR");assert.equal((await post("",changed)).status,409);
+    const registered=await post("",confirm);assert.equal(registered.status,303);
+    const selected=new URLSearchParams({schema_version:bundle.schema_version,schema_digest:bundle.schema_digest});
+    assert.ok(registered.headers.get("location")!.endsWith(`/view?${selected}`));
+    const after=await state();assert.equal(after.definitions.length,before.definitions.length+1);assert.equal(after.audits,before.audits+1);
+    assert.deepEqual(after.definitions.filter(r=>r.schema_version!=="3.0.0"),before.definitions);
+    const download=await fetch(`${base}/bundle?${selected}`,{headers:{cookie:reader.cookie}});assert.equal(download.status,200);
+    assert.equal(download.headers.get("cache-control"),"no-store");assert.match(download.headers.get("content-disposition")!,/attachment/);
+    assert.deepEqual(await download.json(),bundle);
+    const saved=await fetch(`${base}/view?${selected}`,{headers:{cookie:reader.cookie}});assert.equal(saved.status,200);
+    const savedHtml=await saved.text();assert.match(savedHtml,/Registered definition/);assert.match(savedHtml,/unverified/);assert.doesNotMatch(savedHtml,/method="post"/);
+    assert.deepEqual(await state(),after,"read and export do not mutate");
+    assert.equal((await post("",confirm)).status,409);assert.deepEqual(await state(),after);
+    const exactShared=conversionMeaningBundle(original);
+    const oldExport=await fetch(`${base}/bundle?${new URLSearchParams({schema_version:exactShared.schema_version,schema_digest:exactShared.schema_digest})}`,{headers:{cookie:reader.cookie}});
+    assert.equal(oldExport.status,200);assert.deepEqual(await oldExport.json(),exactShared);
+    assert.equal(exactShared.schema_digest,"1f1d34137531516b47d84f489342966738e4a50d18110e9d3ced2dfc5202b5e0");
+    const wrong=new URLSearchParams(selected);wrong.set("schema_digest","0".repeat(64));
+    assert.equal((await fetch(`${base}/bundle?${wrong}`,{headers:{cookie:reader.cookie}})).status,404);
+    assert.equal((await fetch(`${base}/bundle?${selected}&schema_digest=${bundle.schema_digest}`,{headers:{cookie:reader.cookie}})).status,400);
+    assert.equal((await fetch(`${baseUrl}/dashboard/apps/${appB}/conversion-meanings/bundle?${selected}`,{headers:{cookie:reader.cookie}})).status,404);
+    assert.equal((await post("/preview",new URLSearchParams({...Object.fromEntries(form),csrf_token:reader.csrf}),reader)).status,403);
+    assert.equal((await post("",new URLSearchParams({...Object.fromEntries(confirm),csrf_token:reader.csrf}),reader)).status,403);
+    assert.equal((await post("",new URLSearchParams({...Object.fromEntries(confirm),csrf_token:"wrong"}))).status,403);
+    assert.equal((await post("",confirm,admin,"https://synthetic-other.invalid")).status,403);
+    const noCookie=await fetch(`${base}/bundle?${selected}`,{headers:{authorization:`Bearer ${adminSecret}`},redirect:"manual"});
+    assert.ok([303,401].includes(noCookie.status),"dashboard ignores bearer credentials");
   });
 
   it("A06 returns 500 when the durable database path fails", async () => {

@@ -144,7 +144,9 @@ is implemented, with declared versus captured evidence kept separate.
 The [Apple postback observation view](apple-postback-observations.md) now separates
 windows, unsigned values, verification, retries and missing metadata.
 [Apple conversion meanings](apple-conversion-meaning.md) share a registered
-digest with the SDK and expose ranges without inventing postback bindings.
+digest with the SDK and expose ranges without inventing postback bindings. A
+dashboard profile form previews every fine/coarse state before registration and
+exports exact version/digest bundles; deployment remains an explicit SDK step.
 [Apple Ads campaign cost](cost-refresh.md#apple-ads-campaign-cost) now uses the
 existing bounded refresh and correction path with explicit UTC days and currency.
 [Unity purchase binding](../sdk/unity/README.md#protected-store-purchases) now reuses
