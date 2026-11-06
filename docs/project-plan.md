@@ -81,6 +81,12 @@ server replay cover restart, reordered receipt and fresh regrant without
 reviving stopped observations. Legal policy remains with the host; deletion and
 unversioned provider-commerce fences remain independent of SDK regrant.
 
+[Offline payload-key rotation](operations/payload-key-rotation.md) adds bounded
+wrapper replacement and full verification before live cutover. It preserves
+payload bytes, serializes against purge and carries key state into matched
+backups; it does not retire secrets needed by historical backups or promise
+zero-downtime operation.
+
 ## Implemented integration work
 
 The earlier integration plan and structural preparation are complete.

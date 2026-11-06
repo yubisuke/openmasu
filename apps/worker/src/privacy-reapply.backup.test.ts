@@ -341,7 +341,7 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     assert.deepEqual(afterSecond, beforeSecond);
   });
 
-  it("restores a pg_dump and reapplies completed privacy requests before serving data", {
+  it("restores pre-rotation and rewrapped backups and reapplies completed privacy requests before serving data", {
     skip: process.env.OPENMASU_M5_BACKUP_RESTORE !== "1",
   }, async () => {
     const migrationUrl = process.env.OPENMASU_MIGRATION_DATABASE_URL;
@@ -351,10 +351,12 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     const restoredPayloadRoot = join(snapshot, "restored-payloads");
     const bundleRoot = join(snapshot, "backup-bundle");
     const oldBundleRoot = join(snapshot, "old-backup-bundle");
-    const masterKey = "synthetic-m5-privacy-master-key-000000000000000";
+    const legacyBundleRoot = join(snapshot, "legacy-key-backup-bundle");
+    const oldMasterKey = "synthetic-m5-privacy-master-key-000000000000000";
+    let masterKey = oldMasterKey, masterKeyRef = "synthetic-key-v1";
     const revision = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
     cpSync(join(snapshot, "payloads"), root, { recursive: true, force: true });
-    const admin = new Client({ connectionString: migrationUrl });
+    let admin = new Client({ connectionString: migrationUrl });
     await admin.connect();
     await appPool.end();
     await seedPool.end();
@@ -362,7 +364,7 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     seedPool = createSeedPool();
     await waitForDatabaseConnectionsToClose(admin, new URL(migrationUrl).pathname.slice(1));
     const create = (output: string, dump = async (path: string) => runPostgresTool("pg_dump", ["--format=custom", "--file", path, migrationUrl], path)) =>
-      createBackup({ client: admin, output, payloadRoot: root, masterKey, masterKeyRef: "synthetic-key-v1", revision, writersStopped: true, dump });
+      createBackup({ client: admin, output, payloadRoot: root, masterKey, masterKeyRef, revision, writersStopped: true, dump });
     await create(oldBundleRoot);
     const processingRequestId = `privacy:${uuidV7()}`;
     const processingRequestedAt = "2026-08-20T02:05:00.000Z";
@@ -402,6 +404,7 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     });
     let restoredPool: Pool | undefined;
     let failedDatabase = "";
+    let legacyDatabase = "";
     const restoredPoolErrors: Error[] = [];
     let testError: unknown;
     try {
@@ -411,7 +414,30 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
       appPool = createAppPool();
       seedPool = createSeedPool();
       await waitForDatabaseConnectionsToClose(admin, new URL(migrationUrl).pathname.slice(1));
+      await create(legacyBundleRoot);
+      const target = "synthetic-next-backup-master-key-000000000000000";
+      const targetFile = join(snapshot, "synthetic-target-key");
+      writeFileSync(targetFile, target, { mode: 0o600 });
+      await admin.end(); // The real CLI must be the only database client.
+      const rewrapEnvironment = { ...process.env, OPENMASU_PAYLOAD_STORE_DIR: root,
+        OPENMASU_PAYLOAD_MASTER_KEY: oldMasterKey, OPENMASU_PAYLOAD_MASTER_KEY_FILE: undefined };
+      let cutover = false, sawVerification = false;
+      for (let batch = 0; batch < 30 && !cutover; batch++) {
+        const output = execFileSync(process.execPath, ["--import", "tsx", "apps/worker/src/payload-rewrap-cli.ts",
+          "--writers-stopped", "--from-key-ref", "synthetic-key-v1", "--to-key-ref", "synthetic-key-v2", "--target-key-file", targetFile, "--limit", "2"],
+          { encoding: "utf8", env: rewrapEnvironment });
+        const receipt = JSON.parse(output);
+        assert.equal(receipt.payload_rewrap_ok, true); assert.ok(receipt.processed <= 2);
+        assert.equal(output.includes(oldMasterKey) || output.includes(target) || output.includes(root), false);
+        sawVerification ||= receipt.phase === "verifying";
+        cutover = receipt.cutover_ready;
+      }
+      assert.equal(sawVerification, true); assert.equal(cutover, true);
+      masterKey = target; masterKeyRef = "synthetic-key-v2";
+      payloadStore = new EncryptedFilePayloadStore(root, masterKey);
+      admin = new Client({ connectionString: migrationUrl }); await admin.connect();
       const manifest = await create(bundleRoot);
+      assert.match(manifest.wrapping_key_state_sha256!, /^[a-f0-9]{64}$/);
       const boundary = await readPrivacyBoundary(admin);
       const check = (directory: string) => checkBackup({ directory, boundary, revision, maximumAgeHours: 24 });
       await check(bundleRoot);
@@ -439,8 +465,19 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
       });
       assert.equal(liveDrain.completed, 1);
       const restoreOptions = { admin, adminUrl: migrationUrl, directory: bundleRoot, payloadOutput: restoredPayloadRoot,
-        masterKey, masterKeyRef: "synthetic-key-v1", revision, maximumAgeHours: 24, privacyIntakeStopped: true,
+        masterKey, masterKeyRef, revision, maximumAgeHours: 24, privacyIntakeStopped: true,
         currentBoundary: () => readPrivacyBoundary(admin) };
+      // A rotated live store does not make an old matched backup depend on the new key.
+      const legacyRoot = join(snapshot, "legacy-key-restored-payloads");
+      await assert.rejects(restoreBackup({ ...restoreOptions, directory: legacyBundleRoot, payloadOutput: legacyRoot,
+        masterKeyRef: "synthetic-key-v1", restoreArchive: async () => { throw new Error("wrong-key-must-not-reach-restore"); } }), /backup_master_key_mismatch/);
+      const legacyResult = await restoreBackup({ ...restoreOptions, directory: legacyBundleRoot, payloadOutput: legacyRoot,
+        masterKey: oldMasterKey, masterKeyRef: "synthetic-key-v1", restoreArchive: async (url, path) => {
+          legacyDatabase = new URL(url).pathname.slice(1);
+          runPostgresTool("pg_restore", ["--exit-on-error", "--dbname", url, path], path);
+        } });
+      assert.equal(legacyResult.ready, true); assert.equal(legacyResult.privacy_requests, 2);
+      await assert.rejects(new EncryptedFilePayloadStore(legacyRoot, oldMasterKey).read(processingReference));
       await assert.rejects(restoreBackup({ ...restoreOptions, payloadOutput: join(snapshot, "failed-restore"),
         restoreArchive: async (url) => { failedDatabase = new URL(url).pathname.slice(1); throw new Error("synthetic_restore_failure"); } }), /synthetic_restore_failure/);
       assert.equal((await admin.query("SELECT datconnlimit FROM pg_database WHERE datname=$1", [failedDatabase])).rows[0].datconnlimit, 0);
@@ -505,6 +542,7 @@ describe("M5 privacy reapply and deletion reporting", { concurrency: false }, ()
     try {
       if (databaseName) await admin.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
       if (failedDatabase) await admin.query(`DROP DATABASE IF EXISTS "${failedDatabase}"`);
+      if (legacyDatabase) await admin.query(`DROP DATABASE IF EXISTS "${legacyDatabase}"`);
     } catch (error) {
       cleanupErrors.push(error);
     }

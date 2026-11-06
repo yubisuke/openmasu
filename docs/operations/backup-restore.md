@@ -5,6 +5,11 @@ No backup service or second deployment stack is required. This is a stopped-writ
 same-source-revision recovery path, not evidence of a live backup schedule,
 off-site durability or a recovery-time objective. Rehearse with synthetic data first.
 
+For master-key replacement, use [offline payload-key rotation](payload-key-rotation.md)
+instead of swapping the secret alone. A rotated backup includes its verified
+wrapping-key state and checksum; old backups still require their original key.
+Backup creation refuses an in-progress rotation.
+
 With a verified [runtime image archive](runtime-artifacts.md), run these same
 commands in the opt-in `operations` Compose service. The image carries PostgreSQL
 17 client tools and a validated fixed source identity, so host Git/Node/PostgreSQL

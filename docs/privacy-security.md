@@ -307,6 +307,12 @@ expired inputs; a retention duration is an operator decision, not a legal defaul
 
 ## Secrets and encryption
 
+[Offline wrapping-key rotation](operations/payload-key-rotation.md) changes only
+encrypted DEK wrappers, under a lease shared with write/purge. Pending rotation
+blocks ordinary payload access until a bounded full verification pass completes.
+It neither recreates deleted keys nor retires secrets needed by historical
+backups. Operators keep writers stopped and retain the old keys separately.
+
 Bootstrap generates local development secrets. Production deployments must use
 an external secret-management process and rotate keys without committing them.
 Protected payloads use envelope encryption through the payload-store

@@ -61,6 +61,7 @@ For deployment and recovery, see [operator access](operations/access.md),
 [source-free runtime archives](operations/runtime-artifacts.md),
 [single-host operation](operations/single-host.md),
 [upgrades](operations/upgrade.md), [backup/restore](operations/backup-restore.md),
+[offline payload-key rotation](operations/payload-key-rotation.md),
 [observability](operations/observability.md),
 [monitoring rules and recovery](operations/monitoring.md), [capacity](operations/capacity.md),
 [explicit retention](operations/retention.md) and [release publishing](operations/release.md).

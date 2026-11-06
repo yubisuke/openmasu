@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-11-06. On `main`, this page describes the current `main` source tree.
+Updated: 2026-11-07. On `main`, this page describes the current `main` source tree.
 When read on a feature branch, it also includes that branch's unmerged changes.
 Implementation and synthetic verification are not live operational qualification.
 
@@ -48,6 +48,7 @@ qualification is stated. No row establishes production readiness.
 | Operator access | Optional single-app restriction on existing roles; shared API/session/list/export/job gates; atomic audited key issuance/retirement with immediate session revocation | Backend reader credentials remain trusted tenant-scoped SQL access, not app-scoped user logins; no SSO or general IAM |
 | Configuration history | Reader-only app-scoped keyset timeline of safe cost/metric schedule, mapping, webhook content, Google destination and attribution-window changes on the existing audit log | Older field differences stay unknown; private definitions are represented by digests, not disclosed; key identity is not individual-person identity; not a deployment history |
 | Retention expiry | Default-off policy, read-only aggregate preview, fixed bounded receipt, interruption-safe protected-object/expired-nonce expiry and retention-affected replay disclosure | No blanket ledger/credential cleanup, legal duration, backup erasure or live-expiry qualification |
+| Payload-key rotation | Stopped-writer bounded wrapper replacement and verification, resumable checkpoints, purge serialization and matched backup state | Local filesystem only; downtime, stale-lease recovery and old-backup key custody remain operator responsibilities; no automatic secret deletion or live KMS |
 | Receipt and import | Durable SDK/backend admission; explicit raw-event, cost and revenue mappings; private app-scoped CSV mapping revisions; bounded dashboard upload, counts-only preview, exact-byte confirmation and stored results; atomic records, schema rejection and idempotent bulk import | Synthetic evidence only; no provider completeness claim; registration/preview do not import rows, imports do not automatically calculate metrics; encrypted-upload cleanup needs the worker; whole-file atomicity is not claimed |
 | Attribution | First-party Install Referrer, verified platform evidence and imported provider judgments remain separate; optional versioned 1/7/30-day first-party window with evidence-bound preview and activation | Historical receipts keep their recorded revision; platform/imported/engagement rules are not reinterpreted; no probabilistic identity or external-equivalence claim |
 | Apple aggregate measurement | Signed synthetic receivers, separate bounded observations, registered event/revenue meaning profiles and window-local SDK state | Postbacks are not unique installs; selected-schema decoding is unverified, not actual revenue or a verified postback binding; live delivery is unverified |

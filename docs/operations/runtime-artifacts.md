@@ -62,6 +62,11 @@ credentials and app/payload access. It is not a long-running network service.
 Only a trusted deployment operator may run it. PostgreSQL 17 client binaries are
 included for the existing backup CLI. Do not expose secrets in command arguments.
 
+Source-matched images also carry `payload:rewrap` for
+[offline payload-key rotation](payload-key-rotation.md). Run bounded batches via
+this same operations profile with a read-only private target-key-file mount;
+keep all writers stopped through verification and manual secret cutover.
+
 For a same-image backup/restore rehearsal, follow all custody and freshness rules
 in [Backup and restore](backup-restore.md). Example commands, after stopping every
 writer and preventing new writers or privacy intake as required by that runbook:
