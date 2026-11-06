@@ -10,6 +10,8 @@ import {
   type OperatorWebhookCandidate,
 } from "./operator-webhook-worker.js";
 import { buildOperatorWebhookDeletionRequest } from "./operator-webhook-deletions.js";
+import { parseWebhookContentPolicy, previewWebhookContent, applyWebhookContent } from "@openmasu/runtime/webhook-content";
+import { contentPolicyFromForm, renderWebhookContent } from "../../api/src/dashboard/webhook-content.js";
 
 const secret = Buffer.from("synthetic-operator-webhook-secret-material-0001", "utf8");
 const rawInstallation = "installation:must-not-leak";
@@ -37,6 +39,36 @@ const baseCandidate: OperatorWebhookCandidate = {
 };
 
 describe("operator webhook closed envelope", () => {
+  it("shares one closed content policy between synthetic preview and final money/key/name fields", () => {
+    for (const share_money of [false, true]) {
+      const policy = parseWebhookContentPolicy({ mode: "explicit_v1", custom_events: { synthetic_allowed: "receiver_allowed" },
+        event_names: { purchase: "order_recorded" }, share_money });
+      const preview = previewWebhookContent(policy);
+      for (const event_name of ["purchase", "refund", "ad_revenue", "custom_event"] as const) {
+        const candidate = { ...baseCandidate, event_name, event_key: "synthetic_allowed", revenue_source: "mediation",
+          content_policy: policy, policy_revision: 2, installation_id: null, transaction_id: null };
+        const request = buildOperatorWebhookRequest({ candidate, deliveryId: "synthetic-delivery", emittedAt: baseCandidate.occurred_at, secret });
+        const example = preview.examples.find(row => row.source_name === event_name && row.send)!;
+        assert.deepEqual({ name: request.envelope.event.name, details: request.envelope.event.details }, example.event);
+        assert.equal(request.envelope.policy_revision, 2);
+        assert.equal(Object.hasOwn(request.envelope.event.details, "amount_unscaled"), share_money && event_name !== "custom_event");
+      }
+      assert.throws(() => buildOperatorWebhookRequest({ candidate: { ...baseCandidate, event_name: "custom_event", event_key: "not_allowed", content_policy: policy },
+        deliveryId: "synthetic-delivery", emittedAt: baseCandidate.occurred_at, secret }), /content_filtered/);
+      assert.equal(preview.examples.at(-1)?.send, false);
+      assert.equal(applyWebhookContent({ name: "custom_event", details: { event_key: "constructor" } }, policy), undefined);
+      assert.doesNotMatch(JSON.stringify(preview), /secret|installation_id|transaction_id|record_id|event_ref|subject_ref/);
+      const history = { destination_id: "synthetic", events: ["purchase"], status: "active", revisions: [{ policy_revision: 1, definition: policy,
+        definition_digest: preview.preview_digest, created_at: baseCandidate.occurred_at }] };
+      const html = renderWebhookContent("synthetic-app", "synthetic-csrf", history, preview);
+      assert.match(html, /Activate reviewed policy/); assert.doesNotMatch(html, /<script|onload=/);
+      assert.deepEqual(contentPolicyFromForm(new URLSearchParams({ custom_events: "synthetic_allowed=receiver_allowed", event_names: "purchase=order_recorded",
+        ...(share_money ? { share_money: "yes" } : {}) })), policy);
+    }
+    for (const invalid of [{ mode: "legacy_v1" }, { mode: "explicit_v1", custom_events: {}, event_names: { purchase: "refund" }, share_money: false },
+      { mode: "explicit_v1", custom_events: { a: "same", b: "same" }, event_names: {}, share_money: false },
+      { mode: "explicit_v1", custom_events: {}, event_names: {}, share_money: false, attributes: {} }]) assert.throws(() => parseWebhookContentPolicy(invalid));
+  });
   it("uses only the already-delivered subject reference in a closed deletion notice", () => {
     const subjectRef = createHmac("sha256", secret).update(`openmasu:subject_ref:v1\0${rawInstallation}`).digest("hex");
     const prepared = buildOperatorWebhookDeletionRequest({ deliveryId: "018f0000-0000-7000-8000-000000000104",
