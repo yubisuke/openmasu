@@ -9,12 +9,15 @@ import { createServer } from "node:http";
 import { Pool } from "pg";
 import {
   createAppPool,
+  createReaderPool,
   createMigrationPool,
   EncryptedFilePayloadStore,
   PostgresSchedulerStore,
   runScheduledJob,
   withTenant,
 } from "@openmasu/runtime";
+import { loadImportMappingRevision } from "@openmasu/runtime/import-mapping-registry";
+import { mapRow, type ImportMapping } from "./mapping.js";
 import { sha256 } from "@openmasu/attribution-core";
 import { runMmpImport, runMmpImportCommand } from "./runner.js";
 import { commitImportSession, prepareImportSession } from "./import-session.js";
@@ -1210,6 +1213,141 @@ describe("admin privacy integration", () => {
         [metric.metric_run_id])).rows[0].artifact, metric);
     });
     await assert.rejects(payloadStore.read(payloadReference));
+  });
+});
+
+describe("managed import mapping revisions", () => {
+  it("keeps protected revisions immutable, previews read-only, and roles and apps separated", async () => {
+    const scope = { tenantId: "tenant-synthetic-mappings", appId: "app-synthetic-mappings" };
+    const adminKey = "synthetic-mapping-admin-key-00000000000000000001";
+    const operatorKey = "synthetic-mapping-operator-key-000000000000001";
+    const readerKey = "synthetic-mapping-reader-key-00000000000000001";
+    const otherScope = { ...scope, appId: "app-synthetic-mappings-other" };
+    await ensureAdminKeys(appPool, otherScope, ["synthetic-mapping-other-admin-key-000000000001"]);
+    await ensureAdminKeys(appPool, scope, [
+      { key: adminKey, role: "admin", appScope: scope.appId },
+      { key: operatorKey, role: "operator", appScope: scope.appId },
+      { key: readerKey, role: "read_only", appScope: scope.appId },
+    ]);
+    const readerPool = createReaderPool();
+    let corruptProtectedRead = false;
+    const guardedStore = { write: payloadStore.write.bind(payloadStore), purge: payloadStore.purge.bind(payloadStore),
+      scanFor: payloadStore.scanFor.bind(payloadStore), read: async (reference: string) => corruptProtectedRead
+        ? Buffer.from('{"synthetic_corruption":true}') : payloadStore.read(reference) };
+    const config: MaxReceiverConfig = { ...scope, pathSecret: "synthetic-mapping-path", eventKey: "synthetic-mapping-event",
+      tokenMode: "all", maxParameters: 40, maxQueryBytes: 8192 };
+    const server = createServer(createRequestHandler({ pool: appPool, readerPool, payloadStore: guardedStore, maxConfig: config,
+      publicBaseUrl: "http://localhost:8080", redirectorBaseUrl: "http://localhost:8090",
+      dashboard: { enabled: false, publicBaseUrl: "http://localhost:8080", tenantId: scope.tenantId, sessionTtlSeconds: 43200 },
+    }));
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address(); assert.ok(address && typeof address === "object");
+    const base = `http://127.0.0.1:${address.port}/v1/admin/apps/`;
+    const endpoint = `${base}${scope.appId}/import-mappings`;
+    const mapping: ImportMapping = { version: "1.0.0", kind: "manual_cost", source_id: "synthetic-managed-cost",
+      tenant_id: scope.tenantId, app_id: scope.appId, format: "csv", rules: [
+        { target: "network", expression: { source: "synthetic_private_network_header" } },
+        { target: "date", expression: { const: "2026-10-01" } },
+        { target: "as_of", expression: { const: "2026-10-02T00:00:00.000Z" } },
+        { target: "money", expression: { source: "synthetic_private_amount_header", money: { scale: 6, currency_default: "USD" } } },
+      ] };
+    const headers = ["synthetic_private_network_header", "synthetic_private_amount_header"];
+    const body = { mapping_id: "synthetic-managed-cost", revision: 1, mapping, approved_headers: headers };
+    const selection = { mapping_id: body.mapping_id, revision: 1 };
+    const send = (url: string, method: string, key: string | undefined, input?: unknown, raw?: string) => fetch(url, {
+      method, headers: { "content-type": "application/json", ...(key ? { authorization: `Bearer ${key}` } : {}) },
+      ...(input !== undefined || raw !== undefined ? { body: raw ?? JSON.stringify(input) } : {}),
+    });
+    const counts = () => withTenant(appPool, scope.tenantId, async client => (await client.query(`SELECT
+      (SELECT count(*) FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2)::int AS raw,
+      (SELECT count(*) FROM ledger.event_deliveries WHERE tenant_id=$1 AND app_id=$2)::int AS deliveries,
+      (SELECT count(*) FROM ledger.logical_events WHERE tenant_id=$1 AND app_id=$2)::int AS logical,
+      (SELECT count(*) FROM control.import_runs WHERE tenant_id=$1 AND app_id=$2)::int AS imports,
+      (SELECT count(*) FROM ledger.audit_logs WHERE tenant_id=$1 AND app_id=$2)::int AS audits,
+      (SELECT count(*) FROM control.import_mapping_revisions WHERE tenant_id=$1 AND app_id=$2)::int AS revisions`,
+    [scope.tenantId, scope.appId])).rows[0]);
+    try {
+      const registered = await send(endpoint, "POST", adminKey, body);
+      assert.equal(registered.status, 201);
+      const originalMetadata = await registered.json() as Record<string, unknown>;
+      assert.deepEqual(Object.keys(originalMetadata).sort(), ["mapping_id", "revision", "kind", "mapping_digest", "definition_digest", "header_count", "created_at"].sort());
+      const firstCounts = await counts(); assert.equal(firstCounts.audits, 1); assert.equal(firstCounts.revisions, 1);
+      const duplicate = await send(endpoint, "POST", adminKey, body);
+      assert.equal(duplicate.status, 201); assert.deepEqual(await duplicate.json(), originalMetadata);
+      assert.deepEqual(await counts(), firstCounts);
+
+      const changed = structuredClone(mapping);
+      changed.rules.find(rule => rule.target === "money")!.expression.money!.scale = 2;
+      const conflict = await send(endpoint, "POST", adminKey, { ...body, mapping: changed });
+      assert.equal(conflict.status, 409); assert.deepEqual(await conflict.json(), { error: "import_mapping_revision_conflict" });
+      assert.equal((await send(endpoint, "POST", adminKey, { ...body, revision: 2, mapping: changed })).status, 201);
+      const original = await loadImportMappingRevision(appPool, payloadStore, scope, selection);
+      assert.deepEqual(original.metadata, originalMetadata);
+      const row = { synthetic_private_network_header: "synthetic-network", synthetic_private_amount_header: "123" };
+      assert.deepEqual(mapRow(original.mapping, row), mapRow(mapping, row));
+      const revised = await loadImportMappingRevision(appPool, payloadStore, scope, { ...selection, revision: 2 });
+      assert.notEqual(revised.metadata.mapping_digest, original.metadata.mapping_digest);
+      assert.notDeepEqual(mapRow(revised.mapping, row), mapRow(original.mapping, row));
+
+      const beforePreview = await counts();
+      const unchanged = await send(`${endpoint}/preview`, "POST", operatorKey, { ...selection, headers });
+      assert.equal(unchanged.status, 200);
+      const unchangedBody = await unchanged.json() as any;
+      assert.equal(unchangedBody.persistence, "none"); assert.equal(unchangedBody.revision, 1);
+      assert.equal(unchangedBody.comparison.status, "unchanged"); assert.equal(unchangedBody.comparison.expectation_changed, false);
+      const drift = await send(`${endpoint}/preview`, "POST", operatorKey, { ...selection, headers: [headers[1], "synthetic_private_new_header"] });
+      assert.equal(drift.status, 200);
+      const driftBody = await drift.json() as any;
+      assert.deepEqual(driftBody.comparison, { status: "required_sources_missing", approved_count: 2, current_count: 2,
+        added_count: 1, removed_count: 1, required_sources_missing: 1, expectation_changed: false,
+        limitations: ["header_only_no_value_types_or_empty_distribution"] });
+      assert.equal(JSON.stringify(driftBody).includes("synthetic_private_"), false);
+      const expectation = await send(`${endpoint}/preview`, "POST", operatorKey, { ...selection, headers, candidate_mapping: changed });
+      const expectationBody = await expectation.json() as any;
+      assert.equal(expectation.status, 200); assert.equal(expectationBody.comparison.status, "unchanged");
+      assert.equal(expectationBody.comparison.expectation_changed, true);
+      assert.deepEqual(await counts(), beforePreview);
+
+      const listed = await send(`${endpoint}?mapping_id=${body.mapping_id}`, "GET", readerKey);
+      assert.equal(listed.status, 200);
+      const page = await listed.json() as any; assert.deepEqual(page.data.map((entry: any) => entry.revision), [1, 2]);
+      assert.equal(page.next_revision, null);
+      for (const forbidden of ["synthetic_private_", "protected_ref", "encrypted:", "approved_manifest", "rules"]) {
+        assert.equal(JSON.stringify(page).includes(forbidden), false, forbidden);
+      }
+      await withTenant(readerPool, scope.tenantId, async client => {
+        assert.equal((await client.query("SELECT mapping_id,revision FROM control.import_mapping_revisions WHERE tenant_id=$1 AND app_id=$2", [scope.tenantId, scope.appId])).rowCount, 2);
+      });
+      await assert.rejects(withTenant(readerPool, scope.tenantId, client => client.query("SELECT protected_ref FROM control.import_mapping_revisions")), /permission denied/);
+      for (const sql of ["UPDATE control.import_mapping_revisions SET header_count=header_count", "DELETE FROM control.import_mapping_revisions"]) {
+        await assert.rejects(withTenant(ownerPool, scope.tenantId, client => client.query(`${sql} WHERE tenant_id=$1 AND app_id=$2`, [scope.tenantId, scope.appId])), /append-only/);
+      }
+      for (const [key, suffix, input, expected] of [
+        [undefined, "", body, 401], [operatorKey, "", body, 403], [readerKey, "", body, 403],
+        [readerKey, "/preview", { ...selection, headers }, 403],
+        [operatorKey, "/preview", { ...selection, revision: 99, headers }, 404],
+      ] as const) assert.equal((await send(`${endpoint}${suffix}`, "POST", key, input)).status, expected);
+      for (const app of [otherScope.appId, "app-synthetic-unknown"]) {
+        const outside = await send(`${base}${app}/import-mappings/preview`, "POST", operatorKey, { ...selection, headers });
+        assert.equal(outside.status, 404); assert.deepEqual(await outside.json(), { error: "not_found" });
+      }
+      await assert.rejects(loadImportMappingRevision(appPool, payloadStore, { ...scope, tenantId: "tenant-synthetic-other" }, selection), /import_mapping_not_found/);
+      for (const [raw, expected, code] of [
+        ["{", 400, "import_mapping_invalid"], ["[]", 400, "import_mapping_invalid"],
+        [JSON.stringify({ extra: "x".repeat(33 * 1024) }), 413, "import_mapping_too_large"],
+      ] as const) {
+        const invalid = await send(endpoint, "POST", adminKey, undefined, raw);
+        assert.equal(invalid.status, expected); assert.deepEqual(await invalid.json(), { error: code });
+      }
+      corruptProtectedRead = true;
+      const corrupt = await send(`${endpoint}/preview`, "POST", operatorKey, { ...selection, headers });
+      assert.equal(corrupt.status, 503); assert.deepEqual(await corrupt.json(), { error: "import_mapping_unavailable" });
+      corruptProtectedRead = false;
+      assert.deepEqual(await counts(), beforePreview);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+      await readerPool.end();
+    }
   });
 });
 

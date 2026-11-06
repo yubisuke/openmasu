@@ -43,7 +43,8 @@
     "./metric-report-query": "./src/metric-report-query.ts",
     "./metric-report-read": "./src/metric-report-read.ts",
     "./acquisition-kpi-key": "./src/acquisition-kpi-key.ts",
-    "./operator-webhook-signing": "./src/operator-webhook-signing.ts"
+    "./operator-webhook-signing": "./src/operator-webhook-signing.ts",
+    "./import-mapping-registry": "./src/import-mapping-registry.ts"
   },
   "scripts": {
     "db:migrate": "cd ../.. && node --env-file-if-exists=.env --import tsx apps/runtime/src/migrate.ts",

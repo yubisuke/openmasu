@@ -5,6 +5,10 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import type { Pool } from "pg";
 import { EnvironmentSecretStore } from "@openmasu/runtime";
+import { ImportMappingRegistryError, prepareImportMappingRevision } from "@openmasu/runtime/import-mapping-registry";
+import { parseCsv, parseCsvHeader } from "@openmasu/runtime/import-normalization";
+import { parseMapping, type ImportMapping } from "@openmasu/contracts/import-mapping";
+import { compareImportHeaders, createImportHeaderManifest, IMPORT_HEADER_LIMITS } from "@openmasu/contracts/import-mapping-headers";
 import { lintMappings, loadMapping, mapRow, rowMatches } from "./mapping.js";
 import { readRows } from "./source.js";
 import {
@@ -21,6 +25,150 @@ import {
   reportManualCostCompatibility,
   reportMmpImportCompatibility,
 } from "./compatibility-cli.js";
+
+describe("import mapping header manifests", () => {
+  const mapping = (): ImportMapping => parseMapping({
+    version: "1.0.0", kind: "manual_cost", source_id: "synthetic-header-cost", tenant_id: "tenant-a", app_id: "app-a", format: "csv",
+    rules: [
+      { target: "network", expression: { source: "synthetic_network", fallback_column: "synthetic_network_fallback" } },
+      { target: "date", expression: { const: "2026-10-01" } },
+      { target: "as_of", expression: { const: "2026-10-02T00:00:00.000Z" } },
+      { target: "money", expression: { source: "synthetic_amount", money: { scale: 6, currency_default: "USD" } } },
+      { target: "country", expression: { source: "synthetic_country", omit_if_empty: true } },
+    ],
+  });
+  const columns = ["synthetic_network", "synthetic_amount", "synthetic_country"];
+
+  it("admits bounded scoped managed CSV mappings without changing their mapping semantics", () => {
+    const source = mapping(), scope = { tenantId: "tenant-a", appId: "app-a" };
+    const request = { mapping_id: "synthetic-cost", revision: 1, mapping: source, approved_headers: columns };
+    const prepared = prepareImportMappingRevision(scope, request);
+    assert.deepEqual(prepared.definition.mapping, source);
+    assert.deepEqual(mapRow(prepared.definition.mapping, { synthetic_network: "synthetic", synthetic_amount: "123", synthetic_country: "US" }),
+      mapRow(source, { synthetic_network: "synthetic", synthetic_amount: "123", synthetic_country: "US" }));
+    for (const modified of [
+      { ...request, mapping: { ...source, tenant_id: "tenant-other" } },
+      { ...request, mapping: { ...source, app_id: "app-other" } },
+      { ...request, mapping: { ...source, format: "json" } },
+      { ...request, revision: 0 }, { ...request, extra: true },
+    ]) assert.throws(() => prepareImportMappingRevision(scope, modified), /import_mapping_invalid/);
+    assert.throws(() => prepareImportMappingRevision(scope, { ...request, approved_headers: ["synthetic_country"] }),
+      /import_mapping_required_sources_missing/);
+  });
+
+  it("rejects managed schema paths, prototype keys, excessive nesting and body bytes before file parsing", () => {
+    const scope = { tenantId: "tenant-a", appId: "app-a" };
+    const request = { mapping_id: "synthetic-cost", revision: 1, mapping: mapping(), approved_headers: columns };
+    for (const name of ["../common", "../../outside", "C:/synthetic", "click\n"]) {
+      const source = mapping();
+      source.rules.push({ target: "event_name", expression: { const: name } });
+      assert.throws(() => prepareImportMappingRevision(scope, { ...request, mapping: source }), /import_mapping_invalid/);
+    }
+    for (const key of ["__proto__", "constructor", "prototype"]) {
+      const value = JSON.parse(`{"${key}":{"polluted":true}}`);
+      assert.throws(() => prepareImportMappingRevision(scope, { ...request, mapping: { ...mapping(), private: value } }), /import_mapping_invalid/);
+    }
+    let nested: unknown = "synthetic";
+    for (let depth = 0; depth < 18; depth++) nested = { child: nested };
+    assert.throws(() => prepareImportMappingRevision(scope, { ...request, extra: nested }), /import_mapping_invalid/);
+    assert.throws(() => prepareImportMappingRevision(scope, { ...request, extra: "x".repeat(33 * 1024) }),
+      error => error instanceof ImportMappingRegistryError && error.status === 413 && error.code === "import_mapping_too_large");
+    assert.equal(Object.hasOwn(Object.prototype, "polluted"), false);
+  });
+
+  it("uses the strict CSV parser for header-only files and rejects malformed header or row syntax", () => {
+    assert.deepEqual(parseCsvHeader('"synthetic,network",synthetic_amount\r\n'), ["synthetic,network", "synthetic_amount"]);
+    assert.deepEqual(parseCsvHeader("synthetic_network,synthetic_amount"), columns.slice(0, 2));
+    assert.deepEqual(parseCsv("synthetic_network,synthetic_amount", true), []);
+    assert.deepEqual(parseCsvHeader(""), []);
+    for (const source of ["a,a", "a,", '"a', 'a,b\n"one"extra,two', "a,b\none"]) {
+      assert.throws(() => parseCsvHeader(source), /csv_(header|quotes|width)_invalid/);
+    }
+  });
+
+  it("classifies unchanged, reordered, added, removed optional, and missing required headers without public names", () => {
+    const source = mapping();
+    const manifest = createImportHeaderManifest(source, columns);
+    assert.equal(compareImportHeaders(source, manifest, columns).status, "unchanged");
+    assert.equal(compareImportHeaders(source, manifest, [...columns].reverse()).status, "order_only");
+    assert.equal(compareImportHeaders(source, manifest, [...columns, "synthetic_extra"]).status, "unknown_columns");
+    assert.equal(compareImportHeaders(source, manifest, columns.slice(0, 2)).status, "columns_changed");
+    const missing = compareImportHeaders(source, manifest, columns.slice(1));
+    assert.equal(missing.status, "required_sources_missing");
+    assert.equal(missing.required_sources_missing, 1);
+    assert.deepEqual(missing.limitations, ["header_only_no_value_types_or_empty_distribution"]);
+    assert.equal(JSON.stringify(missing).includes("synthetic_"), false);
+    assert.deepEqual(manifest.columns, columns);
+  });
+
+  it("accounts for fallback, defaults, nested omissions, filters, currency, and conservative timezone requirements", () => {
+    const source = mapping();
+    source.row_filter = [{ source: "synthetic_status", equals: "accepted" }];
+    source.rules.find((rule) => rule.target === "as_of")!.expression = {
+      source: "synthetic_time", timestamp: { default_timezone: "UTC", timezone_source: "synthetic_zone", truncate_to_milliseconds: true },
+    };
+    source.rules.find((rule) => rule.target === "money")!.expression.money!.currency_source = "synthetic_currency";
+    source.rules.push({ target: "synthetic_options", expression: { object: {
+      optional: { source: "synthetic_optional", omit_if_empty: true },
+      defaulted: { source: "synthetic_defaulted", default: "known" },
+      mapped: { source: "synthetic_mapped", map: { yes: true }, map_default: false },
+      boolean_defaulted: { source: "synthetic_boolean", boolean: { true_values: ["yes"], false_values: ["no"], default: false } },
+    } } });
+    const supplied = ["synthetic_network_fallback", "synthetic_amount", "synthetic_status", "synthetic_time", "synthetic_zone"];
+    const manifest = createImportHeaderManifest(source, supplied);
+    assert.equal(compareImportHeaders(source, manifest, supplied).required_sources_missing, 0);
+    assert.equal(compareImportHeaders(source, manifest, supplied.filter((column) => !["synthetic_status", "synthetic_zone"].includes(column))).required_sources_missing, 2);
+    delete source.rules.find((rule) => rule.target === "money")!.expression.money!.currency_default;
+    assert.equal(compareImportHeaders(source, manifest, supplied).required_sources_missing, 1);
+    source.rules.find((rule) => rule.target === "as_of")!.expression = {
+      const: "2026-10-02T00:00:00Z", timestamp: { default_timezone: "UTC", timezone_source: "synthetic_zone", truncate_to_milliseconds: true },
+    };
+    assert.equal(compareImportHeaders(source, manifest, supplied.filter((column) => column !== "synthetic_zone")).required_sources_missing, 1);
+  });
+
+  it("does not treat map-before-omit or dotted CSV column names as satisfied source requirements", () => {
+    const source = mapping();
+    source.rules.find((rule) => rule.target === "country")!.expression = {
+      source: "synthetic_country", map: { us: "US" }, omit_if_empty: true,
+    };
+    const supplied = ["synthetic_network", "synthetic_amount"];
+    const manifest = createImportHeaderManifest(source, supplied);
+    assert.equal(compareImportHeaders(source, manifest, supplied).required_sources_missing, 1);
+    source.rules.find((rule) => rule.target === "country")!.expression.map_default = null;
+    assert.equal(compareImportHeaders(source, manifest, supplied).required_sources_missing, 0);
+    source.rules.find((rule) => rule.target === "network")!.expression = { source: "synthetic.nested" };
+    assert.equal(compareImportHeaders(source, manifest, [...supplied, "synthetic.nested"]).required_sources_missing, 1);
+  });
+
+  it("bounds manifest bytes, column count and UTF-8 column bytes and rejects invalid private manifests", () => {
+    const source = mapping();
+    for (const invalid of [[], [""], ["duplicate", "duplicate"], [" leading"], ["line\nbreak"]]) {
+      assert.throws(() => createImportHeaderManifest(source, invalid), /header_invalid/);
+    }
+    for (const oversized of [
+      Array.from({ length: IMPORT_HEADER_LIMITS.maxColumns + 1 }, (_, index) => `column-${index}`),
+      ["界".repeat(86)],
+      Array.from({ length: IMPORT_HEADER_LIMITS.maxColumns }, (_, index) => `${String(index).padStart(3, "0")}${'"'.repeat(253)}`),
+    ]) assert.throws(() => createImportHeaderManifest(source, oversized), /header_limits_exceeded/);
+    const manifest = createImportHeaderManifest(source, columns);
+    assert.throws(() => compareImportHeaders(source, { ...manifest, expectation_digest: "invalid" }, columns), /header_manifest_invalid/);
+    assert.throws(() => createImportHeaderManifest({ ...source, format: "json" }, columns), /header_format_unsupported/);
+  });
+
+  it("hashes expression expectations canonically and separately from header changes", () => {
+    const source = mapping();
+    const manifest = createImportHeaderManifest(source, columns);
+    const reordered = structuredClone(source);
+    reordered.rules.find((rule) => rule.target === "money")!.expression = {
+      money: { currency_default: "USD", scale: 6 }, source: "synthetic_amount",
+    };
+    assert.equal(compareImportHeaders(reordered, manifest, columns).expectation_changed, false);
+    reordered.rules.find((rule) => rule.target === "money")!.expression.money!.scale = 2;
+    const changed = compareImportHeaders(reordered, manifest, columns);
+    assert.equal(changed.status, "unchanged");
+    assert.equal(changed.expectation_changed, true);
+  });
+});
 
 describe("runtime import mapping", () => {
   it("applies nested objects, booleans, maps, uppercase, and timestamps", () => {

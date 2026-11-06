@@ -6,7 +6,7 @@ to replace every feature of an existing provider.
 
 [Project status](STATUS.md) owns current capabilities and release boundaries.
 [Project plan](project-plan.md) gives the acceptance crosswalk for the sequence
-below. Updated: 2026-10-29.
+below. Updated: 2026-10-30.
 
 ## Status vocabulary
 
@@ -80,6 +80,10 @@ uses evidence-bound preview and activation without changing historical rules.
 Saved native D0/D30 KPI sets retain the same cohort, cost and FX meaning as D7,
 with complete-window schedule lags and bounded same-horizon companion corrections;
 old D7 definitions and saved artifacts remain unchanged.
+The [private CSV mapping registry](import-mappings.md#private-saved-csv-mapping-revisions)
+adds app-scoped immutable revisions and header-drift preview without replacing
+the existing local-file CLI. Registration does not import rows; browser CSV
+upload and confirmation-bound execution remain a follow-up operator workflow.
 Follow open child dependencies in the backlog, not the closed functional plan.
 Provider access and privacy-policy decisions remain a separate owner boundary.
 

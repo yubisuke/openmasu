@@ -2,6 +2,93 @@
 
 Runtime import mappings are schema-validated JSON documents. Public files under `examples/mappings/` contain synthetic values only; deployment-specific provider column names and certification evidence remain private. Start with the no-write compatibility report below. Use [Getting started](getting-started.md) for the synthetic runtime and [the optional private checklist](validation/real-data-checklist.md) only when a separate authorization covers real input.
 
+## Private saved CSV mapping revisions
+
+An app can store immutable, sequential mapping revisions for CSV `mmp_raw` and
+`manual_cost` inputs. This is an operator configuration registry, not an import
+or a provider certification. Existing local-file CLI mappings still support
+CSV, JSON and JSONL. Their DSL `version: "1.0.0"`, producer identity and
+`producer_version` are unchanged; the registry's `revision` is a separate
+configuration number.
+
+The app-scoped admin API has three routes:
+
+| Route | Capability | Request and result |
+| --- | --- | --- |
+| `POST /v1/admin/apps/:app/import-mappings` | `administer` | Register `{mapping_id, revision, mapping, approved_headers}`; return revision metadata |
+| `GET /v1/admin/apps/:app/import-mappings` | `read` | List the newest metadata for each mapping ID; optional `mapping_id` selects that mapping's revision history |
+| `POST /v1/admin/apps/:app/import-mappings/preview` | `operate` | Compare `{mapping_id, revision, headers}` against its saved header approval; optional `candidate_mapping` compares changed expectations without saving them |
+
+`mapping` is the existing complete DSL object with `format: "csv"`; its
+`tenant_id` and `app_id` must match the authenticated app. `approved_headers` is
+the explicitly reviewed ordered array of CSV column names, not sample rows.
+Registration rejects missing required expression/filter sources. A `mapping_id`
+is an app-local identifier of 1–128 letters, digits or `._:-` characters; use
+an operational label, not a source row value or credential.
+
+Start at `revision: 1` and increment by one for the same mapping ID. Repeating
+the same revision and canonical definition is idempotent; changing that
+revision or skipping the next number returns a conflict. Old revisions remain
+immutable and explicitly selectable. The newest-metadata list does not activate
+a mapping or make subsequent execution choose the latest revision. For history,
+`?mapping_id=synthetic-cost&after_revision=1` returns up to 100 revisions and a
+`next_revision` continuation; the unfiltered list returns at most 1,000 mapping
+IDs. The app has a total capacity of 1,000 stored revisions across all IDs.
+
+The protected payload store retains one combined
+`{mapping, approved_manifest}` definition. Source column names, mapping rules
+and the private storage reference are not returned by list or preview.
+Metadata is limited to `mapping_id`, `revision`, `kind`, `mapping_digest`,
+`definition_digest`, `header_count` and `created_at`. Reader access exposes only
+this metadata, not the protected definition. Registration records a scoped
+audit entry; header preview returns `persistence: "none"` and writes no ledger,
+import run, saved mapping or audit row. It performs no provider request.
+
+`mapping_digest` hashes the parsed mapping's RFC 8785 canonical JSON;
+`definition_digest` hashes the combined canonical definition. Object-key order
+and insignificant JSON whitespace therefore do not create a new definition;
+array order, including rule and approved-header order, remains significant.
+These are **not** the CLI import-session confirmation token below, which binds
+the exact mapping-file and source-file bytes.
+
+### Header drift preview
+
+Preview returns counts and one closed `comparison.status`, never header names
+or row values:
+
+| Status | Meaning |
+| --- | --- |
+| `unchanged` | The same columns in the same order, with required sources present |
+| `order_only` | The same column set in a different order |
+| `unknown_columns` | Added columns exist; this takes precedence over removed-column reporting when both occur |
+| `columns_changed` | Columns were removed without additions, but required sources remain available |
+| `required_sources_missing` | At least one mapping expression or filter requirement is unsatisfied; this takes precedence over other drift states |
+
+`approved_count`, `current_count`, `added_count`, `removed_count` and
+`required_sources_missing` describe the submitted headers. The last count is
+unsatisfied requirements, not necessarily distinct column names. Existing
+fallback/default/optional-empty rules are considered, but a present column does
+not prove a usable value in every row.
+
+`expectation_changed` is independent of the header status: supplying a
+`candidate_mapping` can change rule/filter expectations even when headers are
+unchanged. It does not register or approve that candidate. Every result includes
+`header_only_no_value_types_or_empty_distribution`: header checks cannot detect
+value-type changes or a different empty-value distribution. Use the existing
+row compatibility report for actual synthetic input; neither check establishes
+metric comparability or live-provider completeness.
+
+The default decoded HTTP body limit is 32 KiB; managed request objects and the
+combined canonical definition also have a fixed 32 KiB limit. Header lists are
+bounded to 256 unique, nonempty columns of at most 256 UTF-8 bytes each, without
+surrounding whitespace or control characters. Managed JSON rejects excessive
+nesting and prototype-related keys; event-schema selection cannot be used as a
+filesystem path. These are HTTP admission guards, not a new DSL version.
+
+There is no browser CSV upload/execute screen in this registry slice. Registering
+or previewing a revision does not ingest any rows; continue using the explicit
+local-file CLI workflow below for execution.
+
 ## Provider-neutral compatibility report
 
 Evaluate a measurement export before opening a database connection or writing any ledger state:

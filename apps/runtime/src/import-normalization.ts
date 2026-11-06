@@ -51,9 +51,9 @@ function csvCells(source: string, strict = false): string[][] {
   return rows;
 }
 
-export function parseCsv(source: string, strict = false): Record<string, string>[] {
+function parsedCsv(source: string, strict: boolean): { names: string[]; rows: string[][] } {
   const [header, ...rows] = csvCells(source, strict);
-  if (!header?.length) return [];
+  if (!header?.length) return { names: [], rows: [] };
   const names = header.map((name) => name.trim());
   if (new Set(names).size !== names.length || (strict && names.some(name => !name))) {
     if (strict) throw new CsvFormatError("csv_header_invalid", 1);
@@ -62,6 +62,16 @@ export function parseCsv(source: string, strict = false): Record<string, string>
   if (strict) for (const [index, values] of rows.entries()) {
     if (values.length !== names.length) throw new CsvFormatError("csv_width_invalid", index + 2);
   }
+  return { names, rows };
+}
+
+/** Read a strict CSV header, including a header-only file; reject malformed data rows too. */
+export function parseCsvHeader(source: string): string[] {
+  return parsedCsv(source, true).names;
+}
+
+export function parseCsv(source: string, strict = false): Record<string, string>[] {
+  const { names, rows } = parsedCsv(source, strict);
   return rows.map((values) => Object.fromEntries(names.map((name, index) => [name, values[index] ?? ""])));
 }
 

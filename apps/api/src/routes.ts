@@ -2,6 +2,9 @@ export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "privacy_receip
 export type RouteCapability = "read" | "operate" | "administer";
 
 export type RouteHandler =
+  | "admin_import_mappings_list"
+  | "admin_import_mappings_register"
+  | "admin_import_mappings_preview"
   | "admin_cost_backfills_list"
   | "admin_cost_backfills_preview"
   | "admin_cost_backfills_confirm"
@@ -175,6 +178,10 @@ function exactPathPattern(path: string): RegExp {
 }
 
 export const routes: readonly RouteDefinition[] = [
+  { handler: "admin_import_mappings_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/import-mappings$/, auth: "admin_bearer", mutates: false, capability: "read" },
+  { handler: "admin_import_mappings_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/import-mappings$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  // A private-reference read needs the app pool, but the preview service performs no writes.
+  { handler: "admin_import_mappings_preview", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/import-mappings\/preview$/, auth: "admin_bearer", mutates: true, capability: "operate" },
   { handler: "admin_cost_backfills_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-backfills$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_cost_backfills_preview", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-backfills\/preview$/, auth: "admin_bearer", mutates: false, capability: "operate" },
   { handler: "admin_cost_backfills_confirm", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/cost-backfills$/, auth: "admin_bearer", mutates: true, capability: "operate" },

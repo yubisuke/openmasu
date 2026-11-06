@@ -16,6 +16,7 @@ type Row = {
 
 const privileges: Privilege[] = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"];
 const readerNoTableSelect = new Set([
+  "control.import_mapping_revisions",
   "control.worker_tenant_cycles",
   "control.retention_items",
   "control.metric_correction_receipts",
@@ -51,6 +52,7 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.import_mapping_revisions",
   "control.operator_webhook_signing_revisions", "control.operator_webhook_signing_retirements",
   "control.operator_bulk_export_credential_revisions",
   "control.comparison_notifications",
@@ -382,6 +384,10 @@ try {
     );
     assert.equal(allowed.rows[0]?.allowed, false, `openmasu_reader retains broad access to ${view}`);
   }
+  const mappingColumns = await pool.query<{ column_name: string; allowed: boolean }>(`SELECT column_name,
+    has_column_privilege('openmasu_reader','control.import_mapping_revisions',column_name,'SELECT') AS allowed
+    FROM information_schema.columns WHERE table_schema='control' AND table_name='import_mapping_revisions'`);
+  for (const row of mappingColumns.rows) assert.equal(row.allowed, row.column_name !== "protected_ref", `import mapping reader column drift: ${row.column_name}`);
   const costColumns = await pool.query<{ column_name: string; allowed: boolean }>(`
     SELECT column_name,has_column_privilege('openmasu_reader','control.cost_schedules',column_name,'SELECT') AS allowed
     FROM information_schema.columns WHERE table_schema='control' AND table_name='cost_schedules'
