@@ -15,6 +15,32 @@ impression-level revenue mapping. It does not read IDFA, request App Tracking
 Transparency permission, fingerprint a device, or link installations across
 applications.
 
+## Purpose-scoped consent (current source)
+
+Before initializing or recording measurement, declare the host application's
+policy with `await sdk.updateConsent(state:policyVersion:)` for all purposes, or
+`await sdk.updateConsentForPurpose("analytics", state: "withdrawn", policyVersion: "synthetic-v1")`
+for one of `attribution`, `analytics`, and `revenue_measurement`. The SDK does not
+choose a legal basis. The optional scoped API does not replace the global API.
+
+Each definitive declaration persists a revision in the existing SQLite metadata.
+Measurements retain their enqueue-time revision. Only the changed purpose's old
+queue is discarded; a later grant does not revive it. `unknown` does not release
+a barrier. `granted` and `not_required` release that purpose explicitly. Legacy
+unversioned queues migrate in place. Consent and revision counters survive restart
+and installation reset. Delivery prefixes at most three current declarations,
+using stable per-credential IDs, even after a control was evicted. Oversized
+notifications do not enter that prefix; their local barrier still applies.
+
+`diagnosticsSnapshot().purposeConsent` exposes the three states, optional revisions,
+and blocked flags. The existing aggregate barrier/retry state means at least one
+purpose is blocked, not that all purposes are stopped. App Store purchase operations
+check `revenue_measurement`; Apple conversion-state operations check `attribution`.
+Privacy-request responses remain invalidated by any intervening declaration.
+Requests already sent cannot be recalled; server receipt ordering and privacy
+fences remain authoritative. No claim is made that older published SDK assets
+include these source APIs.
+
 ## Products
 
 - `OpenMasuCore`: excluded SQLite queue, installation credential, HMAC
