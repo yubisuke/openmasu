@@ -1487,11 +1487,12 @@ it("Issue 347 rolls back terminal publication on callback failure and retries fi
   const mapping:ImportMapping=JSON.parse(readFileSync("examples/mappings/synthetic-optional-columns-click.json","utf8"));
   Object.assign(mapping,{tenant_id:scope.tenantId,app_id:scope.appId,source_id:"synthetic-dashboard-retry"});
   const selection={mapping_id:"synthetic-dashboard-retry",revision:1}, headers=["event_id","occurred_at","click_id","network"];
-  const now=new Date(), bytes=Buffer.from(`${headers.join(",")}\nsynthetic-retry-event,${now.toISOString()},synthetic-retry-click,\n`);
+  const now=new Date(), bytes=Buffer.from(`${headers.join(",")}\nsynthetic-retry-event,${now.toISOString()},synthetic-dashboard-retry-click,\n`);
   await registerImportMappingRevision({pool:appPool,payloadStore,scope,body:{...selection,mapping,approved_headers:headers}});
   const id=await createManagedUpload(appPool,payloadStore,scope,selection,bytes);
   await processManagedImports(appPool,payloadStore,scope.tenantId);
   const row=await readManagedUpload(appPool,scope,id);
+  assert.equal(row.state,"previewed",JSON.stringify({state:row.state,preview:row.preview,reason:row.safe_reason}));
   await confirmManagedUpload(appPool,payloadStore,scope,id,row.confirmation_digest,now);
   await assert.rejects(runMmpImportSource({pool:appPool,mapping,sourceBytes:bytes,now,
     onPublished:async()=>{throw new Error("synthetic-terminal-failure");}}),/synthetic-terminal-failure/);
