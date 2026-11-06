@@ -65,7 +65,7 @@ export function snapshotAssurance(snapshot: Snapshot) {
   // A saved cost/CPI is not a current-snapshot comparison while a recorded
   // correction is pending. Retain the observation, but publish no delta.
   const freshness = new Map(snapshot.freshness_observations?.map(row => [row.key, row.observations]));
-  if (contexts.some(({ key, context }) => ["cost_sum", "cost_over_cohort"].includes(context.definition.definition.calculation)
+  if (contexts.some(({ key, context }) => ["cost_sum", "cost_over_cohort", "cost_over_outcome"].includes(context.definition.definition.calculation)
       && ["recalculation_pending", "input_revised"].includes(freshness.get(key)?.recalculation_state.cost ?? ""))) {
     missing.push("cost_revision_pending");
   }

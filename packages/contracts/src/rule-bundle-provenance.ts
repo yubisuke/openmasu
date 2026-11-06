@@ -43,6 +43,7 @@ export type NonFraudRuleBundleId =
   | "metric-standard-retention"
   | "metric-calendar-activity"
   | "metric-verified-payers"
+  | "metric-outcome-acquisition-cost"
   | "metric-disjoint-cost"
   | "metric-selected-commerce"
   | "metric-refund-reversal"
@@ -65,6 +66,15 @@ export type NonFraudRuleBundleDefinition = {
 };
 
 export const NON_FRAUD_RULE_BUNDLES: Readonly<Record<NonFraudRuleBundleKey, NonFraudRuleBundleDefinition>> = {
+  "metric-outcome-acquisition-cost": {
+    id: "metric-outcome-acquisition-cost", version: "0.4.33", kind: "metric",
+    implementation: "reference-metric-v0.4",
+    rules: ["native-selected-first-party-utc-d7-gross", "complete-cohort-date-plus-nine-days",
+      "exact-key-distinct-converters-or-verified-settled-payers", "cohort-acquisition-day-disjoint-cost",
+      "same-receipt-cutoff-and-current-privacy", "per-cost-half-even-fx-before-half-even-division",
+      "saved-cost-and-outcome-installation-operands", "missing-overlap-immature-or-zero-denominator-is-undefined",
+      "historical-definitions-unchanged"],
+  },
   "metric-calendar-activity-v0.4.32": {
     id: "metric-calendar-activity", version: "0.4.32", kind: "metric",
     implementation: "reference-metric-v0.4",

@@ -25,6 +25,7 @@ it or treating its judgment as first-party evidence.
 | Calculate | [Native D0/D7/D30 and basis-separated D7 acquisition KPIs](docs/acquisition-kpis.md), ROAS, LTV, retention and custom outcomes with saved definitions, cutoffs and exact money |
 | Observe activity | Separate [UTC session starts, custom events and active installations](docs/calendar-activity.md); not unique people or period-unique audiences |
 | Analyze verified purchases | [Transaction count, paying installations, payer rate and purchase-net ARPPU](docs/payer-metrics.md); installations are not people, and undefined money is not zero |
+| Price selected outcomes | [D7 cost per converted or verified paying installation](docs/outcome-acquisition-cost.md), with saved cost/count operands; repeated events do not inflate the denominator |
 | Observe subscription changes | [Google Play states, verified renewals and observed expiries](docs/subscription-observations.md); notifications and old observations are not current entitlement or churn |
 | Maintain | Daily schedules, bounded Google/Apple [cost refresh](docs/cost-refresh.md) and corrections, receipt diagnostics and confirmed ingest recovery |
 | Explain | Reader-only dashboard, saved daily analyses and bounded previous-period views; explicit external revenue/ROAS/LTV, retention and outcome comparison with preserved evidence levels |
@@ -54,7 +55,7 @@ Do not bypass the upgrade preflight or reset a ledger you need to keep.
 Downloaded native SDK evidence is recorded in the publication receipt; it is
 not physical-device or all-platform onboarding evidence.
 
-Current source includes additions through contract patch `v0.4.32`; the wire
+Current source includes additions through contract patch `v0.4.33`; the wire
 identity remains `0.4.0` with schema URNs ending in `:v0.4`. See
 [current status](docs/STATUS.md) and [post-release scope](docs/releases/next.md).
 Use the matching tag and its documentation when evaluating a published release.
@@ -134,8 +135,8 @@ python -m pip install --require-hashes --requirement requirements-contract.txt
 npm run validate
 ```
 
-It checks 28 schemas, 8 registries, 79 reviewed synthetic fixtures, 1027 golden
-output artifacts, 79 scenario assertions, 27 acceptance criteria,
+It checks 28 schemas, 8 registries, 80 reviewed synthetic fixtures, 1040 golden
+output artifacts, 80 scenario assertions, 27 acceptance criteria,
 TypeScript/Python determinism and RFC 8785 conformance, plus type, documentation,
 release-identity and public-data guardrails. It never regenerates goldens.
 Runtime, database and native SDK evidence have separate CI owners.

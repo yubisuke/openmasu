@@ -3,7 +3,7 @@ import { selectDisjointCosts, costCoverageMatchesGrouping } from "./cost-selecti
 import { cohortCalendarDayIndex, canonicalDatedFxPolicy, selectDatedFxRate, standardRetentionClosesAt, type CohortTimeZone, type DatedFxPolicyInput } from "@openmasu/contracts/definitions";
 import { selectPlatformAcquisition, platformAcquisitionDimensions, selectedPlatformProofRows } from "./platform-acquisition.js";
 import { engagementInputs, engagementSnapshotRows, engagementValue, engagementPolicyValue } from "./engagement-metrics.js";
-import { REFERENCE_AD_REVENUE_METRIC_DEFINITIONS, isVerifiedPurchaseProjection, horizonAcquisitionKpiClosesAt } from "@openmasu/contracts/definitions";
+import { REFERENCE_AD_REVENUE_METRIC_DEFINITIONS, isVerifiedPurchaseProjection, horizonAcquisitionKpiClosesAt, outcomeCostClosesAt } from "@openmasu/contracts/definitions";
 import { assertMetricDefinitionSeries } from "@openmasu/contracts/validation";
 import { attemptEvidenceKey, decisionFor, evidenceKey, sortCandidateAttempts } from "./candidates.js";
 import { resolveRefundTarget } from "./ingestion-decisions.js";
@@ -216,15 +216,16 @@ export function metricRuns(
     for (const metricName of selectedNames) {
       const definition = definitionsByName.get(metricName);
       if (!definition) throw new Error(`unknown metric definition: ${metricName}`);
-      if (["metric-basis-acquisition-kpis", "metric-horizon-acquisition-kpis"].includes(definition.rule_bundle_id)
+      if (["metric-basis-acquisition-kpis", "metric-horizon-acquisition-kpis", "metric-outcome-acquisition-cost"].includes(definition.rule_bundle_id)
           && (!evaluation.grouping?.cohort_date || Object.keys(evaluation.grouping)
             .some(key => !definition.grouping_dimensions?.includes(key as never)))) {
         throw new Error("acquisition_kpi_grouping_invalid");
       }
-      const costCalculation = ["cost_sum", "cost_over_cohort"].includes(definition.definition.calculation);
+      const costCalculation = ["cost_sum", "cost_over_cohort", "cost_over_outcome"].includes(definition.definition.calculation);
+      const outcomeCostProfile = definition.rule_bundle_id === "metric-outcome-acquisition-cost";
       const payerProfile = definition.rule_bundle_id === "metric-verified-payers";
       const usesFx = costCalculation || ["revenue_sum", "revenue_over_cost", "revenue_over_cohort", "revenue_over_paying_installations"].includes(definition.definition.calculation);
-      if ((fxPolicy.rate_selection || payerProfile) && definition.value_type === "money"
+      if ((fxPolicy.rate_selection || payerProfile || outcomeCostProfile) && definition.value_type === "money"
           && (definition.currency !== fxPolicy.target_currency || definition.amount_scale !== fxPolicy.target_scale)) {
         throw new Error("dated_fx_target_mismatch");
       }
@@ -325,7 +326,7 @@ export function metricRuns(
       const includesPurchaseNet = !definition.engagement_credit_policy && ["purchase_net_revenue", "total_net_revenue"].includes(
         definition.definition.numerator,
       );
-      const payerPurchases = payerProfile ? purchases.filter(item =>
+      const payerPurchases = payerProfile || outcomeCostProfile ? purchases.filter(item =>
         isVerifiedPurchaseProjection(item.record.producer, item.server.policy_digest)
         && eligibleInstalls.some(installation => installation.server.tenant_id === item.server.tenant_id
           && installation.server.app_id === item.server.app_id
@@ -370,7 +371,9 @@ export function metricRuns(
       const cohortSize = BigInt(new Set(eligibleInstalls.map((install) => install.record.payload.installation_id)).size);
       let value: bigint | undefined;
       let undefined_reason: MetricRun["undefined_reason"];
-      const horizonClosesAt = horizonAcquisitionKpiClosesAt(definition, evaluation.grouping?.cohort_date);
+      let outcomeCostOperands: MetricRun["outcome_cost_operands"];
+      const horizonClosesAt = outcomeCostClosesAt(definition, evaluation.grouping?.cohort_date)
+        ?? horizonAcquisitionKpiClosesAt(definition, evaluation.grouping?.cohort_date);
       const immatureHorizon = !!horizonClosesAt && Date.parse(evaluation.input_received_at_watermark) < Date.parse(horizonClosesAt);
       if (immatureHorizon) {
         undefined_reason = "observation_window_not_elapsed";
@@ -428,7 +431,26 @@ export function metricRuns(
           if (item.currency !== fxPolicy.target_currency) throw new Error(`cost currency mismatch: ${item.cost_record_id}`);
           return sum + scaleMoney(item, fxPolicy.target_scale);
         }, 0n);
-        if (disjoint?.overlapping) {
+        if (outcomeCostProfile) {
+          const outcomeEvents = definition.definition.denominator === "paying_installations" ? payerPurchases
+            : visible.filter(item => item.record.event_name === "custom_event"
+              && item.record.payload.event_key === definition.conversion_event_key
+              && eligibleInstalls.some(install => install.server.tenant_id === item.server.tenant_id
+                && install.server.app_id === item.server.app_id
+                && install.record.payload.installation_id === item.record.payload.installation_id
+                && eligibleRevenue(definition, install.record, item.record)));
+          const count = BigInt(new Set(outcomeEvents.map(item => compositeKey([
+            item.server.tenant_id, item.server.app_id, item.record.payload.installation_id,
+          ]))).size);
+          outcomeCostOperands = { outcome_installation_count: count.toString(),
+            ...(!disjoint?.overlapping && !missingFx && currentCosts.length ? { cost_unscaled: cost.toString() } : {}) };
+          if (disjoint?.overlapping) undefined_reason = "overlapping_cost_grains";
+          else if (cohortSize === 0n) undefined_reason = "empty_cohort";
+          else if (currentCosts.length === 0) undefined_reason = "no_attributed_cost";
+          else if (count === 0n) undefined_reason = definition.definition.denominator === "paying_installations"
+            ? "no_paying_installations" : "no_converted_installations";
+          else value = roundHalfEven(cost, count);
+        } else if (disjoint?.overlapping) {
           undefined_reason = "overlapping_cost_grains";
         } else if (definition.definition.calculation === "cost_over_cohort" && cohortSize === 0n) {
           undefined_reason = "empty_cohort";
@@ -633,6 +655,7 @@ export function metricRuns(
           ? { value_state: "undefined" as const, undefined_reason }
           : { value_unscaled: value.toString() }),
         ...moneyFields,
+        ...(outcomeCostOperands ? { outcome_cost_operands: outcomeCostOperands } : {}),
         ...(fxPolicy.rate_selection && usesFx ? { fx_conversion_snapshot: {
           policy: fxPolicy, snapshot_id: sha256(fxPolicy),
         } } : {}),

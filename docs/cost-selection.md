@@ -1,5 +1,9 @@
 # Safe cost denominators
 
+For cost as a numerator, the opt-in [outcome acquisition-cost profile](outcome-acquisition-cost.md)
+uses the same disjoint selection with a distinct converter or verified payer
+installation denominator. It is not an allocation to individual events.
+
 ROAS is misleading when a campaign total and its breakdowns are summed twice.
 New explicit definitions can opt into `cost_selection_policy=reject_overlapping_grains`.
 This policy is bound to `metric-disjoint-cost` version `0.4.12` or to the explicit

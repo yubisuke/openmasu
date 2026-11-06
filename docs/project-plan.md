@@ -46,6 +46,11 @@ cost or FX selection. All eight roles remain undefined before cohort-date
 midnight plus 2/32 days; schedules enforce those lags, corrections stay bounded
 to complete same-horizon sets, and historical D7 identities remain unchanged.
 These source additions do not change the frozen rc.3 distribution.
+The [outcome acquisition-cost profile](outcome-acquisition-cost.md) extends the
+saved-decision workstream with native UTC D7 cost per distinct exact-key
+converter or verified payer installation. Cost/count operands, undefined
+reasons, receipt/maturity limits and correction lineage stay in the saved run;
+no per-person identity or platform/imported CPA is implied.
 The [private CSV mapping registry](import-mappings.md#private-saved-csv-mapping-revisions)
 adds app-scoped immutable sequential revisions, protected definitions and
 counts-only header drift. Explicit revision selection, idempotent registration

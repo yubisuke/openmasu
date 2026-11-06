@@ -23,6 +23,7 @@ import { syntheticAcquisitionKpiCases, acquisitionKpiExpected } from "./syntheti
 import { syntheticBasisAcquisitionKpiCases, basisAcquisitionKpiFixtureValues } from "./synthetic-basis-acquisition-kpi-cases.js";
 import { syntheticAcquisitionHorizonCases, acquisitionHorizonFixtureValues } from "./synthetic-acquisition-horizon-cases.js";
 import { syntheticPayerCases } from "./synthetic-payer-cases.js";
+import { syntheticOutcomeCostCases } from "./synthetic-outcome-cost-cases.js";
 import { PAYER_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 
 type Any = Record<string, any>;
@@ -349,7 +350,8 @@ function validateRegistryReferences(output: Any, label: string): void {
       "skan_attributed_installs", "skan_conversion_value_distribution", "aak_attributed_installs",
       "aak_attributed_reengagements",
     ]);
-    const expectedVersion = definition.rule_bundle_id === "metric-horizon-acquisition-kpis" ? "0.4.31"
+    const expectedVersion = definition.rule_bundle_id === "metric-outcome-acquisition-cost" ? "0.4.33"
+      : definition.rule_bundle_id === "metric-horizon-acquisition-kpis" ? "0.4.31"
       : definition.rule_bundle_id === "metric-basis-acquisition-kpis" ? "0.4.30"
       : definition.rule_bundle_id === "metric-engagement-policy" ? "0.4.28"
       : definition.rule_bundle_id === "metric-verified-payers" ? "0.4.26"
@@ -616,7 +618,7 @@ if (!summaryOnly) {
       });
     }
     it("contains 77 fixture directories", () => {
-      check(fixtureDirs.length === 79, `expected 78 fixture directories, found ${fixtureDirs.length}`);
+      check(fixtureDirs.length === 80, `expected 80 fixture directories, found ${fixtureDirs.length}`);
     });
   });
 
@@ -1245,6 +1247,16 @@ const scenarios: Array<[string, () => void]> = [
     check(output.metric_runs.length === 20 && output.raw_records.length === 10 && output.deliveries.length === 15, "scenario 79 reviewed inventory");
     for (const [cutoff, values] of Object.entries(expected)) check(equal(names.map(name => output.metric_runs.find((run: Any) => run.metric_run_id === `keyed79-${cutoff}:daily_custom_${name}`)?.value_unscaled), values), `scenario 79 ${cutoff} independent arithmetic`);
   }],
+  ["80 saved outcome acquisition cost uses distinct scoped installations", () => {
+    const { output } = fixture("80-outcome-acquisition-cost");
+    check(output.metric_runs.length === 10 && output.raw_records.length === 23 && output.deliveries.length === 24, "scenario 80 inventory");
+    const runs = output.metric_runs.filter((run: Any) => run.metric_run_id.startsWith("outcome80-a:"));
+    check(equal(runs.map((run: Any) => run.value_unscaled), ["5000000", "10000000"]), "scenario 80 independent money arithmetic");
+    check(equal(runs.map((run: Any) => run.outcome_cost_operands), [
+      { cost_unscaled: "10000000", outcome_installation_count: "2" },
+      { cost_unscaled: "10000000", outcome_installation_count: "1" },
+    ]), "scenario 80 saved operands");
+  }],
   ["72 calendar activity counts logical events and daily installations without acquisition joins", () => {
     const { input, output } = fixture("72-calendar-activity");
     const names = ["daily_session_starts", "daily_custom_events", "daily_active_installations"];
@@ -1258,8 +1270,8 @@ const scenarios: Array<[string, () => void]> = [
 if (!summaryOnly) {
   describe("reviewed scenarios", () => {
     for (const [name, assertion] of scenarios) it(name, assertion);
-    it("contains 79 scenario assertions", () => {
-      check(scenarios.length === 79, "scenario assertion inventory must contain 79 entries");
+    it("contains 80 scenario assertions", () => {
+      check(scenarios.length === 80, "scenario assertion inventory must contain 80 entries");
     });
   });
 
@@ -1828,7 +1840,7 @@ const acceptance: Array<[string, () => void]> = [
     check(corrections.some((item: Any) => item.correction_type === "retraction"), "AC15 retraction");
     check(fixture("17-redaction-recalculation").output.metric_runs.some((item: Any) => item.supersedes_metric_run_id), "AC15 redaction");
   }],
-  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 79 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
+  ["AC16 clock referrer prefetch and withdrawal fixtures pass", () => check(scenarios.length === 80 && fixture("11-clock-skew").output.deliveries.some((item: Any) => item.clock_skew_suspected) && fixture("13-referrer-unsupported").output.attributions.length === 2 && fixture("19-bot-prefetch").output.fraud_decisions.length === 1 && fixture("41-click-injection-suspected").output.fraud_decisions.length === 1 && fixture("53-negative-ctit-clock-anomaly").output.fraud_decisions.some((item: Any) => item.reason_code === "ctit_clock_anomaly") && fixture("20-timestamp-invalid").output.rejections.some((item: Any) => item.reason_code === "timestamp_invalid"), "AC16")],
   ["AC17 server-recognized withdrawal rejects and redacts payload", () => {
     for (const name of ["14-withdrawal-after-occurrence", "15-event-after-withdrawal"]) {
       const value = fixture(name).output;
@@ -1869,7 +1881,7 @@ const acceptance: Array<[string, () => void]> = [
     check(specText.includes("remain private"), "AC20 private boundary");
   }],
   ["AC21 one command validates every schema registry fixture and golden", () => {
-    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 79 && outputArtifactCount === 79 * 13, "AC21");
+    check(schemaPaths.length === 28 && Object.keys(registries).length === 8 && fixtureDirs.length === 80 && outputArtifactCount === 80 * 13, "AC21");
     checkDocumentationDrift(root, validationSummary());
   }],
   ["AC22 repeated and independent evaluators produce identical JCS", () => {
@@ -2320,6 +2332,15 @@ const validRevenue = {
 };
 if (!summaryOnly) {
   describe("semantic mutations", () => {
+    it("outcome_cost_distinct_counts_cost_failures_maturity_and_rounding_match_independent_TS_Python", () => {
+      const cases = syntheticOutcomeCostCases(fixture("80-outcome-acquisition-cost").input);
+      const python = pythonOutputs(cases.map(entry => entry.input));
+      for (const [index, entry] of cases.entries()) {
+        const output = evaluate(entry.input);
+        check(equal(output.metric_runs.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected), `${entry.name}: independent arithmetic`);
+        check(equal(output, python[index]), `${entry.name}: independent artifact parity`);
+      }
+    });
     it("native_horizon_KPIs_keep_maturity_boundaries_receipts_and_missing_cost_in_independent_TS_Python_parity", () => {
       const cases = syntheticAcquisitionHorizonCases(fixture("78-acquisition-horizons").input);
       const python = pythonOutputs(cases.map(entry => entry.input));

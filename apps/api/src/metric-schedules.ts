@@ -205,7 +205,7 @@ export function normalizeMetricScheduleRequest(
     const grouping = normalizedGrouping(evaluation.grouping);
     const acquisitionDays = evaluation.metric_names.flatMap(name => {
       const metric = suppliedDefinitions.find(definition => definition.metric_name === name);
-      return metric && [BASIS_ACQUISITION_KPI_BUNDLE, HORIZON_ACQUISITION_KPI_BUNDLE].includes(metric.rule_bundle_id)
+      return metric && [BASIS_ACQUISITION_KPI_BUNDLE, HORIZON_ACQUISITION_KPI_BUNDLE, "metric-outcome-acquisition-cost"].includes(metric.rule_bundle_id)
         ? [Number((metric.definition.window as JsonObject).day)] : [];
     });
     if (acquisitionDays.length && (dateDimension !== "cohort_date" || lagDays < Math.max(...acquisitionDays) + 2)) {

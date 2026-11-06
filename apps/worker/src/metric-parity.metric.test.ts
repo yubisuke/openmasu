@@ -45,6 +45,7 @@ import { buildDashboardView } from "../../api/src/dashboard/view.js";
 import { renderDashboard } from "../../api/src/dashboard/render.js";
 import { PAYER_METRIC_DEFINITIONS } from "@openmasu/contracts/definitions";
 import { syntheticPayerCases } from "../../../tools/synthetic-payer-cases.js";
+import { syntheticOutcomeCostCases } from "../../../tools/synthetic-outcome-cost-cases.js";
 import { metricValueLabel } from "../../api/src/dashboard/metric-value.js";
 
 type Any = Record<string, any>;
@@ -71,6 +72,74 @@ const basisAcquisitionKpiCases = syntheticBasisAcquisitionKpiCases(basisAcquisit
   JSON.parse(readFileSync("fixtures/v0.4/66-verified-platform-acquisition/input.json", "utf8")));
 const acquisitionHorizonSource: Any = JSON.parse(readFileSync("fixtures/v0.4/78-acquisition-horizons/input.json", "utf8"));
 const acquisitionHorizonCases = syntheticAcquisitionHorizonCases(acquisitionHorizonSource);
+const outcomeCostSource: Any = JSON.parse(readFileSync("fixtures/v0.4/80-outcome-acquisition-cost/input.json", "utf8"));
+const outcomeCostCases = syntheticOutcomeCostCases(outcomeCostSource);
+
+describe("saved outcome acquisition cost SQL parity", { concurrency: false }, () => {
+  const app = createAppPool(), seed = createSeedPool(), reader = createReaderPool();
+  const identity = { tenantId: "tenant-a", appId: "app-a", keyId: "synthetic-outcome80", role: "admin" as const };
+  const query = { tenantId: "tenant-a", appId: "app-a", supersession: "latest" as const, limit: 200 };
+  after(async () => { await Promise.all([app.end(), seed.end(), reader.end()]); });
+  it("outcome_cost_SQL_matches_distinct_counts_missing_overlap_FX_cutoff_and_half_even_cases", async () => {
+    for (const entry of outcomeCostCases) {
+      await ingestFixture(entry.name, entry.input, app, seed);
+      const actual = await computeSqlMetricRuns(app, entry.input, false);
+      assert.deepEqual(actual.map(run => run.value_unscaled ?? run.undefined_reason), entry.expected, entry.name);
+      assertPlatformRunParity(actual, evaluate(entry.input).metric_runs, entry.name);
+    }
+  });
+  it("outcome_cost_saved_operands_JSON_CSV_and_SSR_match_independent_golden", async () => {
+    await ingestFixture("outcome80-saved", outcomeCostSource, app, seed);
+    const actual = await computeSqlMetricRuns(app, outcomeCostSource, true);
+    assertPlatformRunParity(actual, JSON.parse(readFileSync("fixtures/v0.4/80-outcome-acquisition-cost/expected_metric_runs.json", "utf8")), "outcome80 independent golden");
+    const page = await metricReport(reader, identity, query), csv = parseCsv(encodeMetricReport(page, "csv").body);
+    for (const run of actual) {
+      const row = page.data.find(row => row.metric_run_id === run.metric_run_id)!;
+      const exported = csv.find(row => row.metric_run_id === run.metric_run_id)!;
+      assert.deepEqual(row.outcome_cost_operands, run.outcome_cost_operands);
+      assert.equal(exported.value_unscaled, run.value_unscaled ?? "");
+      assert.equal(exported.undefined_reason, run.undefined_reason ?? "");
+      assert.deepEqual(exported.outcome_cost_operands ? JSON.parse(exported.outcome_cost_operands) : undefined, run.outcome_cost_operands);
+      assert.equal(row.comparison_context?.definition.definition.calculation, "cost_over_outcome");
+    }
+    const html = renderDashboard(buildDashboardView({ apps: [], selectedAppId: "app-a", metrics: page, query, csrfToken: "synthetic" }));
+    assert.match(html, /USD 5 per converted installation \(not person\)/);
+    assert.match(html, /USD 10 per verified paying installation/);
+    assert.match(html, /Saved operands: cost 10000000 \(USD scale 6\) \/ 2 outcome installations/);
+  });
+  it("outcome_cost_late_conversion_and_cost_corrections_keep_operand_lineage_and_original_runs", async () => {
+    const input = structuredClone(outcomeCostCases.find(entry => entry.name.includes("late_receipt"))!.input);
+    const costs = input.cost_records; input.cost_records = [];
+    await ingestFixture("outcome80-corrections", { ...input, metric_evaluations: [] }, app, seed);
+    await persistCostImport(app, "synthetic-outcome80-original", costs);
+    const prior = await computeSqlMetricRuns(app, input, true);
+    assert.deepEqual(prior.map(run => run.value_unscaled), ["10000000", "10000000"]);
+    const late = { trigger_kind: "late_events", source_record_ids: ["outcome80-other-install"], date_from: "2026-08-06",
+      date_to: "2026-08-06", watermark: "2026-08-18T00:00:00.000Z" };
+    assert.equal((await requestMetricRecalculation(app, identity, late)).selected_runs, 1);
+    assert.equal((await processMetricRecalculations(app, "tenant-a", 10)).completed, 1);
+    const afterLate = await metricReport(reader, identity, query);
+    assert.equal(afterLate.data.find(row => row.metric_name.includes("cpa_"))?.value_unscaled, "5000000");
+    const revision = await persistCostImport(app, "synthetic-outcome80-revision", [{ ...costs[0], amount_unscaled: "20", as_of: "2026-08-19T00:00:00.000Z" }]);
+    assert.equal((await requestMetricRecalculation(app, identity, { cost_import_run_id: revision.import_run_id,
+      date_from: "2026-08-06", date_to: "2026-08-06", watermark: "2026-08-20T00:00:00.000Z" })).selected_runs, 2);
+    assert.equal((await processMetricRecalculations(app, "tenant-a", 10)).completed, 2);
+    const latest = await metricReport(reader, identity, query);
+    assert.deepEqual(latest.data.map(row => row.value_unscaled), ["10000000", "20000000"]);
+    assert.ok(latest.data.every(row => row.outcome_cost_operands?.cost_unscaled === "20000000" && row.supersedes_metric_run_id));
+    for (const run of prior) {
+      const stored = await withTenant(app, "tenant-a", client => client.query("SELECT artifact FROM ledger.metric_runs WHERE metric_run_id=$1", [run.metric_run_id]));
+      assert.equal(jcs(stored.rows[0].artifact), jcs(run), "old artifact is immutable");
+    }
+    assert.equal((await processMetricRecalculations(app, "tenant-a", 10)).completed, 0);
+    await withTenant(app, "tenant-a", client => client.query(`INSERT INTO ledger.raw_payload_states
+      (tenant_id,app_id,record_id,lifecycle_status,changed_at,privacy_request_id)
+      VALUES ('tenant-a','app-a','outcome80-other-install','redacted','2026-08-21T00:00:00.000Z','privacy:synthetic-outcome80')`));
+    const withdrawn = await metricReport(reader, identity, query);
+    assert.ok(withdrawn.data.every(row => row.value_state === "unavailable" && row.outcome_cost_operands === undefined));
+    assert.ok(parseCsv(encodeMetricReport(withdrawn, "csv").body).every(row => row.outcome_cost_operands === "" && row.value_unscaled === ""));
+  });
+});
 
 describe("native acquisition horizon SQL parity", { concurrency: false }, () => {
   const app = createAppPool(), seed = createSeedPool();

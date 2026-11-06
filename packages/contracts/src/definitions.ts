@@ -54,3 +54,5 @@ export {
   type NonFraudRuleBundleId,
   type NonFraudRuleBundleKey,
 } from "./rule-bundle-provenance.js";
+export { OUTCOME_COST_BUNDLE, OUTCOME_COST_VERSION, outcomeAcquisitionCostDefinitions,
+  isOutcomeCostMetric, isOutcomeCostMetricDefinition, outcomeCostClosesAt } from "./outcome-cost-definitions.js";

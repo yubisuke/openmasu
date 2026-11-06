@@ -1,5 +1,32 @@
 # Contract v0.4 Migration
 
+## Outcome acquisition cost (0.4.33)
+
+The independent native/UTC/D7 profile adds `cost_over_outcome`, the
+`converted_installations` denominator, `no_converted_installations`, and optional
+saved `outcome_cost_operands`. Previous semantics, wire/package `0.4.0`, schema
+URNs and all 79 existing inputs/1027 expected files are unchanged. Migration
+`100_outcome_cost_reason.sql` only extends the metric reason check. No dependency
+or service is added. Bundle hash is
+`11d4ee5f197e03b9d625515b13691109d770231bce83fe9b6c9b12eee3997cee`.
+
+All new goldens in `80-outcome-acquisition-cost/` are accounted for:
+`expected_raw_records.json` and `expected_logical_events.json` (23 each),
+`expected_deliveries.json` (24), `expected_attributions.json` (6),
+`expected_cost_records.json` (3), `expected_corrections.json` (2),
+`expected_metric_definitions.json` (5), `expected_metric_runs.json` (10), and
+empty `expected_privacy_requests.json`, `expected_privacy_tombstones.json`,
+`expected_fraud_decisions.json`, `expected_rejections.json`,
+`expected_reconciliation.json`. The new input and
+[independent derivation](../fixtures/v0.4/80-outcome-acquisition-cost/README.md)
+explain every family, numerical value and digest. TypeScript/Python combined
+JCS SHA-256 is `9db80bf08db3c948911072a2923a3f31cf7457dacc24111459fc2d05bf28cba7`.
+
+`git diff --name-only f4185d9 -- fixtures/v0.4` must contain only fixture 80 and
+the provenance index. Existing golden changes: none. Fixtures/goldens are
+committed separately from evaluator/schema behavior. SQL parity, saved JSON/CSV,
+cost/late correction lineage and privacy withdrawal run in existing Runtime CI.
+
 ## Exact-key daily custom activity (0.4.32)
 
 The independent `metric-calendar-activity` version `0.4.32` binds the existing

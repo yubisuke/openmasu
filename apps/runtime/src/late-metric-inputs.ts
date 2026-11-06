@@ -1,7 +1,7 @@
 import type { PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import { validateMetricDefinition } from "@openmasu/contracts/validation";
-import { isPayerMetricDefinition, isVerifiedPurchaseProjection, isCalendarActivityMetricDefinition } from "@openmasu/contracts/definitions";
+import { isPayerMetricDefinition, isVerifiedPurchaseProjection, isCalendarActivityMetricDefinition, isOutcomeCostMetricDefinition } from "@openmasu/contracts/definitions";
 import { metricAcquisitionSql, metricAcquisitionJoinSql, metricAcquisitionDimensionSql } from "./platform-acquisition.js";
 import { correctionMetricNames, expandAcquisitionCompanions, isCompanionAcquisitionReplay,
   type CorrectionCandidate, type LateEventRecalculationRequest } from "./metric-recalculation.js";
@@ -106,7 +106,7 @@ export function supportsLateMetric(replay: Any): boolean {
       && ["revenue", "purchase_net_revenue", "total_net_revenue"].includes(definition.numerator))
       || (metric.rule_bundle_id === "metric-custom-conversion" && typeof metric.conversion_event_key === "string"
         && ["converted_installations", "converted_installations_over_cohort"].includes(definition?.calculation))
-      || isPayerMetricDefinition(metric))
+      || isPayerMetricDefinition(metric) || isOutcomeCostMetricDefinition(metric))
     && (definition.window?.type === "elapsed" || (metric.calendar_cohort_policy === "cumulative_revenue_on_day_activity"
       && definition.window?.type === "calendar_day")) && Number.isSafeInteger(definition.window.day)
     && definition.window.day >= 0 && definition.window.day <= 90
@@ -242,7 +242,7 @@ export async function selectLateMetricInputs(
            AND mr.comparison_context->'definition'->>'metric_definition_version'='0.4.32')
          OR mr.comparison_context->'definition'->'definition'->>'calculation'
          IN ('revenue_sum','revenue_over_cohort','revenue_over_cost','converted_installations','converted_installations_over_cohort',
-           'purchase_count','paying_installations','paying_installations_over_cohort','revenue_over_paying_installations'))
+           'purchase_count','paying_installations','paying_installations_over_cohort','revenue_over_paying_installations','cost_over_outcome'))
        AND NOT EXISTS (SELECT 1 FROM ledger.metric_runs AS newer WHERE newer.tenant_id=mr.tenant_id
          AND newer.app_id=mr.app_id AND newer.supersedes_metric_run_id=mr.metric_run_id)
      ORDER BY mr.metric_run_id COLLATE "C" LIMIT 101`,
@@ -277,7 +277,7 @@ export async function selectLateMetricInputs(
     }
     else {
       const metric = row.replay.metric_definition;
-      const contributing = isPayerMetricDefinition(metric) ? eligible.filter(event =>
+      const contributing = isPayerMetricDefinition(metric) || isOutcomeCostMetricDefinition(metric) && metric.definition.denominator === "paying_installations" ? eligible.filter(event =>
         isVerifiedPurchaseProjection(event.producer, event.policy_digest ?? "")
         && (event.event_name === "purchase" || metric.definition.numerator === "purchase_net_revenue"
           && event.event_name === "refund" && isVerifiedPurchaseProjection(event.target_producer ?? "", event.target_policy_digest ?? ""))) : eligible;
@@ -327,7 +327,7 @@ export async function selectLateMetricInputs(
          LIMIT 101`, [scope.tenantId, scope.appId, request.watermark, JSON.stringify(contributing),
           JSON.stringify(row.replay.evaluation.grouping), metric.definition.window.day,
           !!metric.acquisition_basis, "after", metric.aggregation_time_zone,
-          metric.fraud_policy ?? "gross", metric.definition.numerator, row.watermark,
+          metric.fraud_policy ?? "gross", isOutcomeCostMetricDefinition(metric) ? metric.definition.denominator : metric.definition.numerator, row.watermark,
           metric.refund_reversal_policy === "cancel_target_refund_at_watermark", committedReceipt, metric.import_provider ?? null,
           metric.conversion_event_key ?? null]);
       if (!impacted.rowCount) continue;

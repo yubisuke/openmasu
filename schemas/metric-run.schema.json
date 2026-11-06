@@ -38,7 +38,14 @@
       "default": "present",
       "description": "Absence is semantically present for v0.2.0 compatibility."
     },
-    "undefined_reason": { "enum": ["no_attributed_cost", "no_activity_events", "empty_cohort", "overlapping_cost_grains", "missing_fx_rate", "observation_window_not_elapsed", "no_paying_installations", "insufficient_activity_history"] },
+    "undefined_reason": { "enum": ["no_attributed_cost", "no_activity_events", "empty_cohort", "overlapping_cost_grains", "missing_fx_rate", "observation_window_not_elapsed", "no_paying_installations", "insufficient_activity_history", "no_converted_installations"] },
+    "outcome_cost_operands": {
+      "type": "object", "additionalProperties": false, "required": ["outcome_installation_count"],
+      "properties": {
+        "outcome_installation_count": { "type": "string", "pattern": "^[0-9]+$" },
+        "cost_unscaled": { "type": "string", "pattern": "^[0-9]+$" }
+      }
+    },
     "value_unscaled": { "type": "string", "pattern": "^-?[0-9]+$" },
     "fraud_policy": { "enum": ["gross", "net"], "default": "gross" },
     "amount_scale": { "type": "integer", "minimum": 0, "maximum": 18 },
@@ -73,6 +80,14 @@
     "evidence_refs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/evidenceRef" } }
   },
   "allOf": [
+    {
+      "if": { "properties": { "outcome_cost_operands": {} }, "required": ["outcome_cost_operands"] },
+      "then": { "properties": {
+        "rule_bundle_id": { "const": "metric-outcome-acquisition-cost" }, "rule_bundle_version": { "const": "0.4.33" },
+        "rule_bundle_hash": { "const": "11d4ee5f197e03b9d625515b13691109d770231bce83fe9b6c9b12eee3997cee" },
+        "value_type": { "const": "money" }
+      } }
+    },
     {
       "if": { "properties": { "fx_conversion_snapshot": {} }, "required": ["fx_conversion_snapshot"] },
       "then": {
