@@ -100,6 +100,11 @@ barrier across restart/reset. Revision-aware server enforcement permits fresh
 regrant without reviving old measurement or bypassing server privacy fences.
 This is a current-source capability, not a change to published SDK archives.
 
+[Offline payload-key rotation](operations/payload-key-rotation.md) extends
+recovery operations without changing encrypted payloads or contract artifacts.
+Bounded rewrap/verification, resume and matched backup state reuse the existing
+store and CLI. All writers stay stopped; old-backup key custody remains explicit.
+
 The published rc.3 packages the completed source plan. Current source adds the
 rc.2 upgrade entry and extends the existing migration/privacy rehearsal
 ([#315](https://github.com/yubisuke/openmasu/issues/315)); deployment availability

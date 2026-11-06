@@ -1,8 +1,8 @@
-import { randomBytes } from "node:crypto";
-import { cp, writeFile } from "node:fs/promises";
+import { createHash, randomBytes } from "node:crypto";
+import { cp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Client, Pool } from "pg";
-import { EncryptedFilePayloadStore, processPrivacyDeletionJobs, withTenant } from "@openmasu/runtime";
+import { EncryptedFilePayloadStore, PAYLOAD_KEY_STATE_FILE, processPrivacyDeletionJobs, withTenant } from "@openmasu/runtime";
 import { checkBackup, createPrivateDirectory, payloadInventory, verifyBackupKey, verifyRestoredDatabase, type PrivacyBoundary } from "@openmasu/runtime/backup";
 import { reapplyCompletedPrivacyRequests } from "./privacy-reapply.js";
 
@@ -30,6 +30,10 @@ export async function restoreBackup(input: {
   url.pathname = `/${database}`;
   await input.restoreArchive(url.toString(), join(input.directory, "database.dump"));
   for (const name of ["objects", "keys"]) await cp(join(input.directory, "payloads", name), join(output, name), { recursive: true, force: false, errorOnExist: true });
+  if (manifest.wrapping_key_state_sha256) {
+    await cp(join(input.directory, "payloads", PAYLOAD_KEY_STATE_FILE), join(output, PAYLOAD_KEY_STATE_FILE), { force: false, errorOnExist: true });
+    if (createHash("sha256").update(await readFile(join(output, PAYLOAD_KEY_STATE_FILE))).digest("hex") !== manifest.wrapping_key_state_sha256) throw new Error("backup_restored_payload_mismatch");
+  }
   for (const name of ["objects", "keys"] as const) {
     const inventory = await payloadInventory(join(output, name));
     if (inventory.sha256 !== manifest[name].sha256 || inventory.files !== manifest[name].files) throw new Error("backup_restored_payload_mismatch");

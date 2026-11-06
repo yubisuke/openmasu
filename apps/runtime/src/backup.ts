@@ -4,7 +4,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import type { Client } from "pg";
 import { checkAppliedMigrations, readMigrations, type Migration } from "./migration-engine.js";
 import { fileDigest, migrationDigest } from "./upgrade.js";
-import { EncryptedFilePayloadStore } from "./payload-store.js";
+import { EncryptedFilePayloadStore, PAYLOAD_KEY_STATE_FILE, readyPayloadKeyState } from "./payload-store.js";
 
 export interface PrivacyBoundary {
   format: "openmasu-privacy-boundary-v1";
@@ -27,6 +27,7 @@ export interface BackupManifest {
   database_sha256: string;
   objects: Inventory;
   keys: Inventory;
+  wrapping_key_state_sha256?: string;
   privacy: PrivacyBoundary;
 }
 const digest = (value: unknown): string => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -67,6 +68,18 @@ export function assertSamePrivacy(left: PrivacyBoundary, right: PrivacyBoundary)
 
 export async function requireBackupOperator(client: Client): Promise<void> {
   if (!(await client.query("SELECT rolsuper FROM pg_roles WHERE rolname=current_user")).rows[0]?.rolsuper) throw new Error("backup_superuser_required");
+}
+
+/** Called inside the operator transaction, shared by backup and offline key maintenance. */
+export async function lockStoppedWriters(client: Client): Promise<void> {
+  await client.query("SET LOCAL lock_timeout='5s'");
+  await client.query("SELECT pg_advisory_xact_lock(hashtext('openmasu:backup'))");
+  const others = (await client.query("SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND backend_type='client backend'")).rows[0].count;
+  if (others !== 0) throw new Error("backup_writers_not_stopped");
+  const tables = (await client.query<{ schema: string; name: string }>(
+    "SELECT n.nspname AS schema,c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('control','ledger','ephemeral','testing','public') AND c.relkind IN ('r','p') ORDER BY n.nspname,c.relname",
+  )).rows;
+  for (const table of tables) await client.query(`LOCK TABLE ${quote(table.schema)}.${quote(table.name)} IN SHARE MODE`);
 }
 
 async function schemaDigest(client: Client): Promise<string> {
@@ -122,24 +135,21 @@ export async function createBackup(input: {
   const output = await createPrivateDirectory(input.output);
   await input.client.query("BEGIN");
   try {
-    await input.client.query("SET LOCAL lock_timeout='5s'");
-    await input.client.query("SELECT pg_advisory_xact_lock(hashtext('openmasu:backup'))");
-    const others = (await input.client.query("SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND backend_type='client backend'")).rows[0].count;
-    if (others !== 0) throw new Error("backup_writers_not_stopped");
-    const tables = (await input.client.query<{ schema: string; name: string }>(
-      "SELECT n.nspname AS schema,c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('control','ledger','ephemeral','testing','public') AND c.relkind IN ('r','p') ORDER BY n.nspname,c.relname",
-    )).rows;
-    for (const table of tables) await input.client.query(`LOCK TABLE ${quote(table.schema)}.${quote(table.name)} IN SHARE MODE`);
+    await lockStoppedWriters(input.client);
     const privacy = await readPrivacyBoundary(input.client);
     const migrations = await schemaDigest(input.client);
     const objects = await payloadInventory(join(input.payloadRoot, "objects"));
     const keys = await payloadInventory(join(input.payloadRoot, "keys"));
     await new EncryptedFilePayloadStore(input.payloadRoot, input.masterKey).verifyWrappedKeys();
+    const keyState = readyPayloadKeyState(input.payloadRoot);
+    if (keyState && JSON.parse(keyState.toString()).key_id !== input.masterKeyRef) throw new Error("backup_master_key_mismatch");
     await input.dump(join(output, "database.dump"));
     await regularFile(join(output, "database.dump"));
     if ((await stat(join(output, "database.dump"))).size === 0) throw new Error("backup_database_empty");
     await mkdir(join(output, "payloads"), { mode: 0o700 });
     for (const name of ["objects", "keys"]) await cp(join(input.payloadRoot, name), join(output, "payloads", name), { recursive: true, errorOnExist: true, force: false });
+    if (keyState) await writeFile(join(output, "payloads", PAYLOAD_KEY_STATE_FILE), keyState, { flag: "wx", mode: 0o600 });
+    if (!(keyState ?? Buffer.alloc(0)).equals(readyPayloadKeyState(input.payloadRoot) ?? Buffer.alloc(0))) throw new Error("backup_payload_changed");
     for (const [name, expected] of [["objects", objects], ["keys", keys]] as const) {
       for (const root of [input.payloadRoot, join(output, "payloads")]) {
         if (JSON.stringify(await payloadInventory(join(root, name))) !== JSON.stringify(expected)) throw new Error("backup_payload_changed");
@@ -148,7 +158,8 @@ export async function createBackup(input: {
     const manifest: BackupManifest = { format: "openmasu-backup-v1", bundle_id: bundleId, captured_at: privacy.captured_at,
       completed_at: new Date().toISOString(), source_revision: input.revision, postgres_major: 17,
       migration_digest: migrations, master_key_ref: input.masterKeyRef, master_key_check: masterKeyCheck,
-      database_sha256: await fileDigest(join(output, "database.dump")), objects, keys, privacy };
+      database_sha256: await fileDigest(join(output, "database.dump")), objects, keys, privacy,
+      ...(keyState ? { wrapping_key_state_sha256: createHash("sha256").update(keyState).digest("hex") } : {}) };
     await input.client.query("COMMIT");
     // A failed/partial attempt has no manifest and cannot pass preflight.
     await writeFile(join(output, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n", { flag: "wx", mode: 0o600 });
@@ -185,6 +196,11 @@ export async function checkBackup(input: {
     const actual = await payloadInventory(join(input.directory, "payloads", name));
     if (!row[name] || row[name].sha256 !== actual.sha256 || row[name].files !== actual.files) throw new Error("backup_payload_checksum_mismatch");
   }
+  const keyState = readyPayloadKeyState(join(input.directory, "payloads"));
+  if (row.wrapping_key_state_sha256 !== undefined) {
+    if (!hex(row.wrapping_key_state_sha256) || !keyState || createHash("sha256").update(keyState).digest("hex") !== row.wrapping_key_state_sha256
+      || JSON.parse(keyState.toString()).key_id !== row.master_key_ref) throw new Error("backup_wrapping_key_state_mismatch");
+  } else if (keyState) throw new Error("backup_wrapping_key_state_mismatch");
   return row;
 }
 

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it } from "node:test";
-import { EncryptedFilePayloadStore } from "./payload-store.js";
+import { EncryptedFilePayloadStore, PAYLOAD_KEY_STATE_FILE } from "./payload-store.js";
 import { checkBackup, createPrivateDirectory, payloadInventory, validatePrivacyBoundary, type BackupManifest } from "./backup.js";
 import { fileDigest, migrationDigest } from "./upgrade.js";
 import { readMigrations } from "./migration-engine.js";
@@ -33,6 +33,23 @@ it("backup preflight rejects stale backups and untrusted or stale privacy checkp
     await assert.rejects(checkBackup({ ...input, boundary: { ...boundary, captured_at: "2026-10-11T11:44:00.000Z" } }), /freshness_failed/);
     await assert.rejects(checkBackup({ ...input, boundary: { ...boundary, request_digest: "e".repeat(64) } }), /privacy_boundary_mismatch/);
     assert.equal(await fileDigest(join(directory, "manifest.json")), before);
+    const root = join(directory, "payloads"), old = "synthetic-backup-old-key-0000000000000", next = "synthetic-backup-next-key-000000000000";
+    const store = new EncryptedFilePayloadStore(root, old);
+    await store.write({ tenantId: "synthetic", appId: "app", objectId: "backup" }, Buffer.from("synthetic encrypted backup evidence"));
+    const rotation = { fromKeyRef: "synthetic-old", toKeyRef: "synthetic-next", targetSecret: next, limit: 1, writersStopped: true };
+    let step;
+    do { step = await store.rewrapBatch(rotation); } while (!step.cutover_ready);
+    const keyStatePath = join(root, PAYLOAD_KEY_STATE_FILE), keyState = await readFile(keyStatePath);
+    const rotated: BackupManifest = { ...manifest, master_key_ref: "synthetic-next",
+      objects: await payloadInventory(join(root, "objects")), keys: await payloadInventory(join(root, "keys")),
+      wrapping_key_state_sha256: await fileDigest(keyStatePath) };
+    await writeFile(join(directory, "manifest.json"), JSON.stringify(rotated));
+    assert.deepEqual(await checkBackup(input), rotated);
+    await writeFile(keyStatePath, keyState.toString().replace("synthetic-next", "synthetic-forged"));
+    await assert.rejects(checkBackup(input), /wrapping_key_state_mismatch/);
+    await writeFile(keyStatePath, keyState);
+    await writeFile(join(directory, "manifest.json"), JSON.stringify({ ...rotated, wrapping_key_state_sha256: undefined }));
+    await assert.rejects(checkBackup(input), /wrapping_key_state_mismatch/);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
