@@ -1,0 +1,53 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "cost_record_id": "kpi70-cost-a",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "campaign_id": "kpi70-a",
+    "network": "synthetic-network",
+    "country": "US",
+    "date": "2026-08-06",
+    "amount_unscaled": "10",
+    "amount_scale": 0,
+    "currency": "USD",
+    "source": "imported_reported",
+    "as_of": "2026-08-12T00:00:00.000Z",
+    "dimension_digest": "ac2952ac3e9a05839cb7cedd20f3dab477c5734d45dd72bf64a39480d597b435",
+    "report_snapshot_digest": "91b9eb4394927701e265b75c0b6a94f06eb16fb6f50e97af9aa7accf949760a8"
+  },
+  {
+    "contract_version": "0.4.0",
+    "cost_record_id": "kpi70-cost-b",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "campaign_id": "kpi70-b",
+    "network": "synthetic-network",
+    "country": "US",
+    "date": "2026-08-06",
+    "amount_unscaled": "4",
+    "amount_scale": 0,
+    "currency": "USD",
+    "source": "imported_reported",
+    "as_of": "2026-08-12T00:00:00.000Z",
+    "dimension_digest": "4968a8d86623d4cab1577716f0ede795b86f34e07ba3c97d4d4c4158bafeca88",
+    "report_snapshot_digest": "391db2517d3b0fb5fad1ee55bfb4fb5e363eda9c2424dfcb5fc6b9f550e3098c"
+  },
+  {
+    "contract_version": "0.4.0",
+    "cost_record_id": "kpi70-cost-cost-only",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "campaign_id": "kpi70-cost-only",
+    "network": "synthetic-network",
+    "country": "US",
+    "date": "2026-08-06",
+    "amount_unscaled": "2",
+    "amount_scale": 0,
+    "currency": "USD",
+    "source": "imported_reported",
+    "as_of": "2026-08-12T00:00:00.000Z",
+    "dimension_digest": "38421b660fbc66019e34e77268a8575f951d3fd5cfe94e1db6cab27daa08745c",
+    "report_snapshot_digest": "153baa4d9b6ec625c2d58fed8d2f5ef0e75eedd682e9ef760ed7cb4f910de494"
+  }
+]

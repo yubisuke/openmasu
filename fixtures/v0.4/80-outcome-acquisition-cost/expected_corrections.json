@@ -1,0 +1,22 @@
+[
+  {
+    "contract_version": "0.4.0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "correction_id": "correction:kpi70-refund-a",
+    "corrects_record_id": "kpi70-purchase-a",
+    "correction_type": "correction",
+    "correction_reason": "refund",
+    "effective_at": "2026-08-07T12:00:00.000Z"
+  },
+  {
+    "contract_version": "0.4.0",
+    "tenant_id": "tenant-a",
+    "app_id": "app-a",
+    "correction_id": "correction:kpi70-refund-b",
+    "corrects_record_id": "kpi70-purchase-b",
+    "correction_type": "correction",
+    "correction_reason": "refund",
+    "effective_at": "2026-08-07T12:00:00.000Z"
+  }
+]
