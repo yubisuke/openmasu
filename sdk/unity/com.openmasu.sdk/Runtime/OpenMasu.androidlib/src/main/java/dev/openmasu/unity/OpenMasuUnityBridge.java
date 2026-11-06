@@ -187,6 +187,17 @@ public final class OpenMasuUnityBridge {
     catch (RuntimeException exception) { callback.onResult("native_failure"); }
   }
 
+  public static void requestPrivacyPage(String requestType, String cursor, int pageSize, StringCallback callback) {
+    OpenMasuSdk current = sdk;
+    if (current == null) { callback.onResult("not_enrolled\n"); return; }
+    dev.openmasu.sdk.OpenMasuPrivacyRequestType type;
+    if ("access".equals(requestType)) type = dev.openmasu.sdk.OpenMasuPrivacyRequestType.ACCESS;
+    else if ("portability".equals(requestType)) type = dev.openmasu.sdk.OpenMasuPrivacyRequestType.PORTABILITY;
+    else { callback.onResult("invalid_request\n"); return; }
+    current.requestPrivacyPage(type, cursor == null || cursor.isEmpty() ? null : cursor, pageSize,
+      value -> { callback.onResult(value.bridgeValue()); return kotlin.Unit.INSTANCE; });
+  }
+
   public static void setCollectionEnabled(boolean enabled) { requireSdk().setCollectionEnabled(enabled); }
 
   public static void resetInstallationId(BooleanCallback callback) {

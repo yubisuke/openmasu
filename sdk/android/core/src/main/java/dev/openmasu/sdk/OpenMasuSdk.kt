@@ -340,6 +340,38 @@ class OpenMasuSdk private constructor(
 
   fun clearSyntheticValidationSession() { storage.setSyntheticValidationSession(null) }
 
+  /** One bounded page, never queued or persisted. Callback runs on the SDK executor. */
+  fun requestPrivacyPage(requestType: OpenMasuPrivacyRequestType, cursor: String? = null, pageSize: Int = 200,
+    onComplete: (OpenMasuPrivacyResult) -> Unit) {
+    val revision = measurementRevision.get()
+    val installationId = storage.installationId()
+    val wasResetting = storage.deletionReceipt() != null || storage.resetInstallPending()
+    executor.execute {
+      val result = try {
+        val capable = transport as? OpenMasuPrivacyTransport
+        val credential = storage.credential()
+        when {
+          !OpenMasuPrivacyPage.validRequest(cursor, pageSize) -> OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.INVALID_REQUEST)
+          wasResetting || storage.deletionReceipt() != null || storage.resetInstallPending() -> OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.RESET_PENDING)
+          revision != measurementRevision.get() || installationId != storage.installationId() -> OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.CONTEXT_CHANGED)
+          capable == null -> OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.UNSUPPORTED)
+          credential == null -> OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.NOT_ENROLLED)
+          else -> {
+            val json = capable.privacyPage(credential, installationId, requestType, cursor, pageSize)
+            if (revision != measurementRevision.get() || installationId != storage.installationId() ||
+              credential != storage.credential() || storage.deletionReceipt() != null || storage.resetInstallPending())
+              OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.CONTEXT_CHANGED)
+            else {
+              val page = OpenMasuPrivacyPage.parse(json, requestType, pageSize)
+              OpenMasuPrivacyResult(if (page.complete) OpenMasuPrivacyResultStatus.COMPLETE else OpenMasuPrivacyResultStatus.PAGE_READY, page)
+            }
+          }
+        }
+      } catch (_: Exception) { OpenMasuPrivacyResult(OpenMasuPrivacyResultStatus.REQUEST_FAILED) }
+      onComplete(result)
+    }
+  }
+
   @JvmOverloads
   fun resetInstallationId(onComplete: (Boolean) -> Unit = {}) {
     clearSyntheticValidationSession()

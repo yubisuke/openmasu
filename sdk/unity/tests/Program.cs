@@ -54,6 +54,7 @@ internal static partial class Program
         ExerciseRevenuePlatformCompatibility();
         ExerciseLocalDiagnostics();
         ExerciseSyntheticValidation();
+        ExercisePrivacyPages();
         ExerciseProtectedPurchases(mainThread);
         ExerciseAdRevenue();
         ExerciseLevelPlayAdapter();

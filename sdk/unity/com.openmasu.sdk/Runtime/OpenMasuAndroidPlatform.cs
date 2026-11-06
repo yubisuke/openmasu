@@ -5,7 +5,7 @@ using UnityEngine;
 namespace OpenMasu.Unity
 {
     public sealed class OpenMasuAndroidPlatform : IOpenMasuPlatform, IOpenMasuRevenuePlatform, IOpenMasuQueueHealthPlatform,
-        IOpenMasuGooglePlayPurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform, IOpenMasuSyntheticValidationPlatform
+        IOpenMasuGooglePlayPurchasePlatform, IOpenMasuConsentPlatform, IOpenMasuAdRevenuePlatform, IOpenMasuDiagnosticsPlatform, IOpenMasuSyntheticValidationPlatform, IOpenMasuPrivacyPlatform
     {
         private AndroidJavaClass bridge;
         private bool disposed;
@@ -60,6 +60,8 @@ namespace OpenMasu.Unity
             EnsureBridge().CallStatic("setSyntheticValidationSession", token, expiresAtMs, new StringCallback(completion));
         public void ClearSyntheticValidationSession(Action<string> completion) =>
             EnsureBridge().CallStatic("clearSyntheticValidationSession", new StringCallback(completion));
+        public void RequestPrivacyPage(string requestType, string cursor, int pageSize, Action<string> completion) =>
+            EnsureBridge().CallStatic("requestPrivacyPage", requestType, cursor ?? string.Empty, pageSize, new StringCallback(completion));
         public void SetCollectionEnabled(bool enabled) => EnsureBridge().CallStatic("setCollectionEnabled", enabled);
         public void ResetInstallationId(Action<bool> completion) =>
             EnsureBridge().CallStatic("resetInstallationId", new BooleanCallback(completion));

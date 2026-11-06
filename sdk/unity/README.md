@@ -1,5 +1,14 @@
 # OpenMasu Unity SDK
 
+## Access and portability
+
+Current source provides `client.RequestPrivacyPage` through the optional
+`IOpenMasuPrivacyPlatform` capability. Android and iOS use the installation's
+existing signing transport, returning one bounded page via the Unity dispatcher.
+See [portable export](../../docs/operations/portable-export.md#native-sdk-and-unity-callers)
+for partial/complete/failure states, reset guards and explicit host save/share.
+This source API is not present in previously published package archives.
+
 For verified versioned tarball downloads and minimal host installation, see
 [SDK distribution](../../docs/sdk-distribution.md).
 

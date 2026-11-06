@@ -6,7 +6,17 @@ import java.net.URL
 import java.util.Base64
 import java.util.UUID
 
-class HmacHttpTransport(private val configuration: OpenMasuConfiguration) : OpenMasuDeletionTransport, OpenMasuSyntheticValidationTransport {
+class HmacHttpTransport(private val configuration: OpenMasuConfiguration) : OpenMasuDeletionTransport, OpenMasuSyntheticValidationTransport, OpenMasuPrivacyTransport {
+  override fun privacyPage(credential: InstallationCredential, installationId: String,
+    requestType: OpenMasuPrivacyRequestType, cursor: String?, pageSize: Int): String {
+    require(OpenMasuPrivacyPage.validRequest(cursor, pageSize))
+    val body = JSONObject().put("installation_id", installationId).put("request_type", requestType.wire)
+      .put("pagination", "cursor_v1").put("page_size", pageSize)
+    if (cursor != null) body.put("cursor", cursor)
+    val response = request("/v1/privacy/access", body.toString(), credential, maxBytes = OpenMasuPrivacyPage.MAX_BYTES)
+    if (response.status != 200) throw OpenMasuTransportFailure.http(response.status)
+    return response.body
+  }
   override fun enroll(installationId: String): InstallationCredential {
     val response = request("/v1/installations", JSONObject().put("installation_id", installationId).toString(), null)
     if (response.status != 201) throw OpenMasuTransportFailure.http(response.status)
@@ -53,7 +63,7 @@ class HmacHttpTransport(private val configuration: OpenMasuConfiguration) : Open
     else -> error("deletion_response_invalid")
   }
 
-  private fun request(path: String, body: String, credential: InstallationCredential?, authenticated: Boolean = true): Response {
+  private fun request(path: String, body: String, credential: InstallationCredential?, authenticated: Boolean = true, maxBytes: Int? = null): Response {
     val bytes = body.toByteArray(Charsets.UTF_8)
     val timestamp = System.currentTimeMillis().toString()
     val nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(18).also { java.security.SecureRandom().nextBytes(it) })
@@ -81,7 +91,18 @@ class HmacHttpTransport(private val configuration: OpenMasuConfiguration) : Open
       connection.outputStream.use { it.write(bytes) }
       val status = connection.responseCode
       val stream = if (status in 200..399) connection.inputStream else connection.errorStream
-      return Response(status, stream?.bufferedReader()?.use { it.readText() }.orEmpty())
+      val text = if (maxBytes == null) stream?.bufferedReader()?.use { it.readText() }.orEmpty() else stream?.use {
+        val output = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        while (true) {
+          val read = it.read(buffer)
+          if (read < 0) break
+          require(output.size() + read <= maxBytes) { "privacy_response_too_large" }
+          output.write(buffer, 0, read)
+        }
+        output.toString("UTF-8")
+      }.orEmpty()
+      return Response(status, text)
     } catch (_: java.io.IOException) {
       throw OpenMasuTransportFailure.networkUnavailable()
     } finally {

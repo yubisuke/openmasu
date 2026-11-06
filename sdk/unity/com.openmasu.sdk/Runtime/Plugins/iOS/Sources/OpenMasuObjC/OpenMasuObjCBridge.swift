@@ -625,6 +625,19 @@ public func openmasuIOSSetCollectionEnabled(_ enabled: Bool) {
   Task { try? await sdk.setCollectionEnabled(enabled) }
 }
 
+@_cdecl("openmasu_ios_privacy_page")
+public func openmasuIOSPrivacyPage(_ requestType: UnsafePointer<CChar>?, _ cursor: UnsafePointer<CChar>?,
+  _ pageSize: Int32, _ requestId: Int64, _ callbackValue: OpenMasuCStringCallback?) {
+  guard let sdk = BridgeState.get() else { callback(callbackValue, requestId: requestId, value: "not_enrolled\n"); return }
+  guard let requestType, let type = OpenMasuPrivacyRequestType(rawValue: String(cString: requestType))
+  else { callback(callbackValue, requestId: requestId, value: "invalid_request\n"); return }
+  let next = cursor.map { String(cString: $0) }.flatMap { $0.isEmpty ? nil : $0 }
+  Task {
+    let result = await sdk.requestPrivacyPage(type, cursor: next, pageSize: Int(pageSize))
+    callback(callbackValue, requestId: requestId, value: result.bridgeValue)
+  }
+}
+
 @_cdecl("openmasu_ios_queue_health")
 public func openmasuIOSQueueHealth(
   _ requestId: Int64,
