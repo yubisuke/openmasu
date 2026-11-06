@@ -52,7 +52,7 @@ export async function generateDsarResponse(input: DsarScope & {
     const values = (stage:number,subject:string) => [input.tenantId,input.appId,subject,state.cutoff,state.epoch,state.snapshot,
       state.stage===stage ? state.after?.[0] ?? null : null,state.stage===stage ? state.after?.[1] ?? null : null,limit+1];
     const records = state.stage<=0 ? await client.query<Any>(
-      `WITH subject_events AS (
+      `WITH subject_events AS MATERIALIZED (
          SELECT logical_event_id FROM ledger.install_facts WHERE tenant_id=$1 AND app_id=$2 AND installation_id=$3
          UNION SELECT logical_event_id FROM ledger.session_facts WHERE tenant_id=$1 AND app_id=$2 AND installation_id=$3
          UNION SELECT logical_event_id FROM ledger.purchase_facts WHERE tenant_id=$1 AND app_id=$2 AND installation_id=$3
@@ -60,9 +60,18 @@ export async function generateDsarResponse(input: DsarScope & {
          UNION SELECT logical_event_id FROM ledger.ad_revenue_facts WHERE tenant_id=$1 AND app_id=$2 AND installation_id=$3
          UNION SELECT logical_event_id FROM ledger.custom_event_facts WHERE tenant_id=$1 AND app_id=$2 AND installation_id=$3
          UNION SELECT logical_event_id FROM ledger.deep_link_open_facts WHERE tenant_id=$1 AND app_id=$2 AND installation_id=$3
+       ), page AS MATERIALIZED (
+         SELECT logical.logical_event_id,logical.record_lifecycle,raw.record_id,raw.event_name,
+                raw.occurred_at,raw.received_at,raw.processing_purpose_id
+         FROM subject_events subject JOIN ledger.logical_events logical USING(logical_event_id)
+         JOIN ledger.raw_records raw ON raw.tenant_id=logical.tenant_id AND raw.app_id=logical.app_id AND raw.record_id=logical.record_id
+         WHERE logical.tenant_id=$1 AND logical.app_id=$2 AND raw.received_at<=$4::text
+           AND (raw.export_xid IS NULL OR raw.export_epoch<>$5::timestamptz OR pg_visible_in_snapshot(raw.export_xid,$6::pg_snapshot))
+           AND ($7::text IS NULL OR (raw.occurred_at,raw.record_id COLLATE "C")>($7::text,$8::text COLLATE "C"))
+         ORDER BY raw.occurred_at,raw.record_id COLLATE "C" LIMIT $9
        )
        SELECT raw.record_id,raw.event_name,raw.occurred_at,raw.received_at,
-              raw.processing_purpose_id,raw.payload_lifecycle_status,logical.record_lifecycle,
+              raw.processing_purpose_id,lifecycle.lifecycle_status AS payload_lifecycle_status,raw.record_lifecycle,
               purchase.amount_unscaled AS purchase_amount_unscaled,purchase.amount_scale AS purchase_amount_scale,
               purchase.currency AS purchase_currency,
               refund.amount_unscaled AS refund_amount_unscaled,refund.amount_scale AS refund_amount_scale,
@@ -71,23 +80,16 @@ export async function generateDsarResponse(input: DsarScope & {
               revenue.currency AS revenue_currency,revenue.revenue_source,
               deep.open_source,deep.days_since_last_session,
               install.install_type,custom.event_key
-         FROM subject_events AS subject
-         JOIN ledger.logical_events AS logical USING (logical_event_id)
-         JOIN ledger.raw_records_current AS raw
-           ON raw.tenant_id=logical.tenant_id AND raw.app_id=logical.app_id AND raw.record_id=logical.record_id
-         JOIN ledger.raw_records AS admission
-           ON admission.tenant_id=raw.tenant_id AND admission.app_id=raw.app_id AND admission.record_id=raw.record_id
+         FROM page AS raw
+         JOIN LATERAL (SELECT lifecycle_status FROM ledger.raw_payload_states
+           WHERE tenant_id=$1 AND app_id=$2 AND record_id=raw.record_id ORDER BY state_seq DESC LIMIT 1) lifecycle ON true
          LEFT JOIN ledger.install_facts AS install USING (logical_event_id)
          LEFT JOIN ledger.purchase_facts AS purchase USING (logical_event_id)
          LEFT JOIN ledger.refund_facts AS refund USING (logical_event_id)
          LEFT JOIN ledger.ad_revenue_facts AS revenue USING (logical_event_id)
          LEFT JOIN ledger.deep_link_open_facts AS deep USING (logical_event_id)
          LEFT JOIN ledger.custom_event_facts AS custom USING (logical_event_id)
-        WHERE logical.tenant_id=$1 AND logical.app_id=$2
-          AND raw.received_at<=$4::text
-          AND (admission.export_xid IS NULL OR admission.export_epoch<>$5::timestamptz OR pg_visible_in_snapshot(admission.export_xid,$6::pg_snapshot))
-          AND ($7::text IS NULL OR (raw.occurred_at,raw.record_id COLLATE "C")>($7::text,$8::text COLLATE "C"))
-        ORDER BY raw.occurred_at,raw.record_id COLLATE "C" LIMIT $9`,
+        ORDER BY raw.occurred_at,raw.record_id COLLATE "C"`,
       values(0,input.installationId),
     ) : {rows:[]};
     const attributions = state.stage<=1 ? await client.query<Any>(
