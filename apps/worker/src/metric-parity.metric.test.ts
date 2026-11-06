@@ -191,6 +191,7 @@ describe("verified payer SQL parity and saved reporting", { concurrency: false }
       JSON.parse(readFileSync("fixtures/v0.4/66-verified-platform-acquisition/input.json", "utf8")));
     for (const entry of cases) {
       await ingestFixture(entry.name, entry.input, app, seed);
+      await persistSyntheticPlatformResults(app, entry.input);
       const actual = await computeSqlMetricRuns(app, entry.input, true);
       assert.deepEqual(entry.input.metric_definitions.map((definition: Any) => {
         const row = actual.find(run => run.metric_name === definition.metric_name)!;

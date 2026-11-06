@@ -88,6 +88,8 @@ export function syntheticPayerCohortCases(nativeSource: Any, platformSource: Any
     });
     add("native_basis_never_claims_platform_campaign", ["0", "0", "empty_cohort", "no_paying_installations"], input => select(input, "native_fraud_net"));
     add("current_privacy_removes_payer_population", ["0", "0", "empty_cohort", "no_paying_installations"], input => {
+      // Match the server projection of the deleted install's protected proof.
+      input.platform_acquisition_inputs.find((proof: Any) => proof.install_record_id === "meta-66").lifecycle_status = "redacted";
       input.privacy_requests = [{ contract_version: "0.4.0", tenant_id: "tenant-a", app_id: "app-a",
         privacy_request_id: "privacy-payer-cohort", deletion_subject_digest: "7".repeat(64), deletion_scope: "installation",
         requested_via: "tenant_admin_api", requester_auth_ref: "synthetic-admin", requested_at: "2026-10-08T00:00:00.000Z",
