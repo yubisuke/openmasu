@@ -108,6 +108,8 @@ or completeness evidence; see [the comparison guide](cohort-comparison.md).
 The prerequisites already implemented in the core plan do not need to be repeated.
 Apple [postback observations](apple-postback-observations.md), [conversion meanings](apple-conversion-meaning.md)
 and [campaign cost](cost-refresh.md#apple-ads-campaign-cost) are implemented.
+Conversion meanings include a profile form, complete state preview and immutable
+version/digest bundle export; this does not deploy SDK configuration automatically.
 Postbacks are not unique installs, selected meaning is not a verified binding,
 and live Apple permissions/billing remain unverified. Other explicit dependencies
 remain in the linked issues.

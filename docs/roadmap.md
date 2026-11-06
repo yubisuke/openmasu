@@ -144,6 +144,8 @@ not verification or entitlement evidence. These helpers are included in rc.2.
 
 Apple [postback observations](apple-postback-observations.md), [registered conversion meanings](apple-conversion-meaning.md)
 and [scoped campaign cost](cost-refresh.md#apple-ads-campaign-cost) are implemented.
+Conversion meanings include a profile form, complete state preview and immutable
+version/digest bundle export; this does not deploy SDK configuration automatically.
 Selected decoding remains unverified; live provider access is not established.
 
 Saved daily analysis and [broader external cohort comparison](cohort-comparison.md#expanded-closed-declaration)

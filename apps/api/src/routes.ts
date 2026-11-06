@@ -160,6 +160,11 @@ export type RouteHandler =
   | "dashboard_app_link_identity"
   | "dashboard_apple_registration"
   | "dashboard_conversion_schema"
+  | "dashboard_meanings_list"
+  | "dashboard_meanings_read"
+  | "dashboard_meanings_export"
+  | "dashboard_meanings_preview"
+  | "dashboard_meanings_register"
   | "dashboard_rule_bundle"
   | "dashboard_google_data_manager"
   | "dashboard_apps_create";
@@ -334,6 +339,11 @@ export const routes: readonly RouteDefinition[] = [
   { handler: "dashboard_app_link_identity", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/link-identity$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_apple_registration", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/apple-registration$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_conversion_schema", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/conversion-schemas$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_meanings_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/conversion-meanings$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_meanings_read", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/conversion-meanings\/view$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_meanings_export", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/conversion-meanings\/bundle$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_meanings_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/conversion-meanings\/preview$/, auth: "dashboard_session", mutates: false, capability: "administer" },
+  { handler: "dashboard_meanings_register", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/conversion-meanings$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_rule_bundle", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/rule-bundles$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_fraud_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/rule-bundles\/preview$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_attribution_window", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/attribution-window$/, auth: "dashboard_session", mutates: false, capability: "administer" },

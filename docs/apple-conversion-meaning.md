@@ -5,6 +5,46 @@ operator-selected postback explanation to one registered canonical SHA-256
 digest. It does **not** establish which schema Apple used. Existing count-based
 schemas and the bundled default are unchanged and are not reinterpreted.
 
+## Design and export in the dashboard
+
+From an app's configuration or Apple postback report, open **Conversion meanings**.
+An administrator can enter the version, half-open midnight-UTC deployment dates,
+ordered event keys, revenue currency/scale and integer boundaries, coarse cutoffs
+and lock policy without writing JSON. The form supports only `event_revenue_v1`;
+it uses the same parser and canonical bytes as the API below.
+
+Preview before registering. The preview lists all 64 fine values and all three
+coarse meanings, including unreachable states and values outside the definition.
+Amounts are unscaled integers and ranges, never estimated actual revenue. Duplicate
+boundaries, invalid fields and capacity overflow fail before registration.
+Successful previews perform no database writes. Registration requires an explicit
+confirmation bound to the preview digest; editing the definition requires a new
+preview. A version cannot replace an already registered definition.
+
+Readers can inspect and download definitions but cannot preview or register new
+ones. The list shows the most recent 100 registered profiles; an exact version and
+digest can retrieve an older one. No version is automatically selected or deployed.
+Forms are bounded to 32 KiB and version strings to 128 characters. Dashboard
+mutations retain session, role, CSRF and Origin checks; rejected authorization
+attempts can be audited.
+
+The downloaded JSON bundle has four fields:
+
+```text
+format: openmasu.apple-conversion-meaning.v1
+schema_version: the registered version
+schema_digest: SHA-256 of the canonical definition's UTF-8 bytes
+canonical_definition: the canonical JSON definition as a string
+```
+
+Decode this container, then pass the unchanged UTF-8 bytes of
+`canonical_definition` to the Swift loader below with the same version and digest.
+Do not pass the entire bundle or pretty-print/re-encode its definition before
+loading. Export verifies the stored definition's digest and never rewrites it.
+Digest equality establishes configuration identity, not a verified postback
+binding, SDK deployment or Apple delivery. The advanced JSON form and existing
+registration API remain available for legacy definitions.
+
 ## Register and deploy
 
 Post `schema_version` and `definition` to the existing administrator endpoint

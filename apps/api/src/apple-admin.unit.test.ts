@@ -4,8 +4,35 @@ import { canonicalConversionSchema } from "./apple-admin.js";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { parseConversionMeaning, meaningUpdate, decodeConversionMeaning } from "./apple-conversion-meaning.js";
+import { conversionMeaningBundle, meaningFormValues, parseMeaningForm } from "./apple-meaning-configuration.js";
+import { renderMeaningConfiguration, renderMeaningConfigurationForm } from "./dashboard/apple-meaning.js";
+import { jcs } from "@openmasu/attribution-core/canonical";
 
 describe("Apple conversion schema registration", () => {
+  it("Issue 361 form and exported canonical bytes match the existing parser and Swift digest", () => {
+    const {definition}=JSON.parse(readFileSync("sdk/ios/Tests/OpenMasuApplePostbackTests/Vectors/meaning.json","utf8"));
+    const form=new URLSearchParams({...meaningFormValues(definition),csrf_token:"synthetic-csrf"});
+    const parsed=parseMeaningForm(form), bundle=conversionMeaningBundle(parsed);
+    assert.equal(jcs(parsed),jcs(parseConversionMeaning(definition)));
+    assert.equal(bundle.canonical_definition,jcs(definition));
+    assert.equal(bundle.schema_digest,"1f1d34137531516b47d84f489342966738e4a50d18110e9d3ced2dfc5202b5e0");
+    assert.deepEqual(JSON.parse(bundle.canonical_definition),definition);
+    const html=renderMeaningConfiguration("app-synthetic",parsed,"synthetic-csrf");
+    assert.equal((html.match(/data-fine="\d+"/g)??[]).length,64);
+    for(const coarse of ["low","medium","high"]) assert.match(html,new RegExp(`<th scope="row">${coarse}</th>`));
+    assert.match(html,/Postback binding: unverified/);assert.match(html,/\[100, 500\) USD/);
+    assert.match(html,/Outside this definition/);assert.match(html,/Unreachable: revenue bucket without revenue event/);
+    assert.match(html,/Register this exact definition/);assert.doesNotMatch(html,/<script|javascript:|\son\w+=/i);
+    const saved=renderMeaningConfiguration("app-synthetic",parsed,undefined,true);
+    assert.doesNotMatch(saved,/method="post"/);assert.match(saved,/Download registered SDK configuration/);
+    assert.doesNotMatch(renderMeaningConfigurationForm("app-synthetic","csrf",[],false),/method="post"/);
+    for(const [name,value] of [["event_keys","one,two,three,four"],["thresholds","0,1,2,3,4,5,6,7,8"],
+      ["thresholds","0,100,100"],["thresholds","0,1.5"],["medium_from","4junk"],["effective_to","2026-02-30"],
+      ["lock_at_maximum","on"],["extra","synthetic-unsupported"]]) {
+      const invalid=new URLSearchParams(form);invalid.set(name,value);assert.throws(()=>parseMeaningForm(invalid),/conversion_meaning/);
+    }
+    const duplicate=new URLSearchParams(form);duplicate.append("currency","USD");assert.throws(()=>parseMeaningForm(duplicate),/form_invalid/);
+  });
   it("canonicalizes object keys deterministically without changing arrays", () => {
     const left = canonicalConversionSchema({
       version: "1.0.0",
