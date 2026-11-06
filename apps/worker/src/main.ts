@@ -19,6 +19,7 @@ import {
 } from "@openmasu/runtime";
 import { AdServicesLookupLimiter, processAdServicesLookups } from "./adservices-worker.js";
 import { processMaxInbox } from "./import/max-worker.js";
+import { processManagedImports } from "./import/managed-worker.js";
 import { listRuntimeWorkTenants, processSdkInbox } from "./sdk-worker.js";
 import { aggregateSourceDay, resolveExpiredQuarantines } from "./fraud-worker.js";
 import { processIntegrityVerifications, type IntegrityProvider } from "./integrity-verifier.js";
@@ -238,6 +239,9 @@ async function processTenantCycle(tenantId: string, pool: Pool, schedulerPool: P
       metaKeys,
       batchLimit: sdkInboxBatchLimit,
     });
+  });
+  await runWorkerJob(tenantId, "managed_import", async () => {
+    await processManagedImports(pool, payloadStore, tenantId);
   });
   await runWorkerJob(tenantId, "adservices_lookup", async () => {
     await processAdServicesLookups(pool, payloadStore, tenantId, {

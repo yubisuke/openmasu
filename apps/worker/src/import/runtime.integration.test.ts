@@ -16,10 +16,13 @@ import {
   runScheduledJob,
   withTenant,
 } from "@openmasu/runtime";
-import { loadImportMappingRevision } from "@openmasu/runtime/import-mapping-registry";
+import { loadImportMappingRevision, registerImportMappingRevision } from "@openmasu/runtime/import-mapping-registry";
+import { createManagedUpload, readManagedUpload, confirmManagedUpload, loadManagedUploadBytes, sweepManagedUploads } from "@openmasu/runtime/managed-imports";
+import { processManagedImports } from "./managed-worker.js";
+import { csrfToken } from "../../../api/src/session.js";
 import { mapRow, type ImportMapping } from "./mapping.js";
 import { sha256 } from "@openmasu/attribution-core";
-import { runMmpImport, runMmpImportCommand } from "./runner.js";
+import { runMmpImport, runMmpImportCommand, runMmpImportSource } from "./runner.js";
 import { commitImportSession, prepareImportSession } from "./import-session.js";
 import { persistCostImport } from "./cost.js";
 import { runCostImportCommand, runCostImportFile } from "./cost-cli.js";
@@ -32,7 +35,7 @@ import { processMaxInbox } from "./max-worker.js";
 import { ingestRuntimeBatch } from "../ingestion.js";
 import { ensureAdminKeys } from "../../../api/src/admin-auth.js";
 import { createRequestHandler } from "../../../api/src/router.js";
-import { privacySubjectDigest } from "../../../api/src/privacy.js";
+import { executePrivacyRequest, privacySubjectDigest } from "../../../api/src/privacy.js";
 import { TokenBucket } from "../../../api/src/rate-limit.js";
 
 const appPool = createAppPool();
@@ -1348,6 +1351,162 @@ describe("managed import mapping revisions", () => {
       await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
       await readerPool.end();
     }
+  });
+});
+
+it("Issue 347 previews CSV without ledger writes, confirms exact bytes once, and rejects unsafe dashboard mutations", async () => {
+  const scope={tenantId:"tenant-synthetic-csv-dashboard",appId:"app-synthetic-csv-dashboard"};
+  const admin="synthetic-csv-dashboard-admin-0000000000000000001";
+  const reader="synthetic-csv-dashboard-reader-000000000000000001";
+  const operator="synthetic-csv-dashboard-operator-0000000000000001";
+  await ensureAdminKeys(appPool,scope,[{key:admin,role:"admin",appScope:scope.appId},
+    {key:reader,role:"read_only",appScope:scope.appId},{key:operator,role:"operator",appScope:scope.appId}]);
+  const readerPool=createReaderPool(), now=new Date();
+  const mapping:ImportMapping=JSON.parse(readFileSync("examples/mappings/synthetic-optional-columns-click.json","utf8"));
+  Object.assign(mapping,{tenant_id:scope.tenantId,app_id:scope.appId,source_id:"synthetic-dashboard-clicks"});
+  const selection={mapping_id:"synthetic-dashboard-clicks",revision:1};
+  const headers=["event_id","occurred_at","click_id","network"];
+  const bytes=Buffer.from(`${headers.join(",")}\nsynthetic-dashboard-event,${now.toISOString()},synthetic-dashboard-click,synthetic-private-row-network\nsynthetic-invalid-event,not-a-date,synthetic-invalid-click,\n`);
+  const config:MaxReceiverConfig={...scope,pathSecret:"synthetic-csv-path",eventKey:"synthetic-csv-event",tokenMode:"all",maxParameters:40,maxQueryBytes:8192};
+  const server=createServer(createRequestHandler({pool:appPool,readerPool,payloadStore,maxConfig:config,
+    publicBaseUrl:"http://localhost:8080",redirectorBaseUrl:"http://localhost:8090",
+    dashboard:{enabled:true,publicBaseUrl:"http://localhost:8080",tenantId:scope.tenantId,sessionTtlSeconds:43200}}));
+  await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));
+  const address=server.address();assert.ok(address && typeof address==="object");
+  const base=`http://127.0.0.1:${address.port}`, path=`/dashboard/apps/${scope.appId}/imports`;
+  const login=async(key:string)=>{
+    const res=await fetch(`${base}/dashboard/session`,{method:"POST",redirect:"manual",body:new URLSearchParams({admin_key:key})});
+    assert.equal(res.status,303);const cookie=res.headers.get("set-cookie")!.split(";",1)[0];
+    return {cookie,csrf:csrfToken(cookie.slice(cookie.indexOf("=")+1))};
+  };
+  const counts=()=>withTenant(appPool,scope.tenantId,async client=>(await client.query(`SELECT
+    (SELECT count(*) FROM ledger.raw_records WHERE tenant_id=$1 AND app_id=$2)::int AS raw,
+    (SELECT count(*) FROM ledger.event_deliveries WHERE tenant_id=$1 AND app_id=$2)::int AS deliveries,
+    (SELECT count(*) FROM ledger.logical_events WHERE tenant_id=$1 AND app_id=$2)::int AS logical,
+    (SELECT count(*) FROM control.import_runs WHERE tenant_id=$1 AND app_id=$2)::int AS imports,
+    (SELECT count(*) FROM ledger.cost_records WHERE tenant_id=$1 AND app_id=$2)::int AS costs`,[scope.tenantId,scope.appId])).rows[0]);
+  try {
+    const auth=await login(admin), op=await login(operator), ro=await login(reader);
+    const post=async(suffix:string,form:URLSearchParams|FormData,identity=op,origin="http://localhost:8080")=>fetch(`${base}${path}${suffix}`,{
+      method:"POST",redirect:"manual",headers:{cookie:identity.cookie,origin},body:form});
+    const registration=new URLSearchParams({csrf_token:auth.csrf,definition:JSON.stringify({...selection,mapping,approved_headers:headers})});
+    assert.equal((await post("/mappings",registration,auth)).status,303);
+    assert.equal((await post("/mappings",registration,op)).status,403);
+    const uploadForm=(body:Buffer,token=op.csrf)=>{
+      const form=new FormData();form.set("csrf_token",token);form.set("selection",`${selection.mapping_id}@1`);
+      form.set("csv",new Blob([new Uint8Array(body)]),"synthetic-private-filename.csv");return form;
+    };
+    const before=await counts();
+    assert.equal((await post("",uploadForm(bytes,ro.csrf),ro)).status,403);
+    assert.equal((await post("",uploadForm(bytes,"wrong"))).status,403);
+    assert.equal((await post("",uploadForm(bytes),op,"https://synthetic-other.invalid")).status,403);
+    assert.equal((await post("",uploadForm(Buffer.alloc(4*1024*1024+1,65)))).status,413);
+    const unauth=await fetch(`${base}${path}`,{redirect:"manual"});assert.ok([401,303].includes(unauth.status));
+    const uploaded=await post("",uploadForm(bytes));assert.equal(uploaded.status,303);
+    const location=uploaded.headers.get("location")!, id=location.split("/").at(-1)!;
+    assert.deepEqual(await counts(),before);
+    const discovered=await appPool.query("SELECT control.list_m4_work_tenants() AS tenant_id");
+    assert.ok(discovered.rows.some(r=>r.tenant_id===scope.tenantId));
+    await processManagedImports(appPool,payloadStore,scope.tenantId);
+    assert.deepEqual(await counts(),before);
+    const preview=await readManagedUpload(readerPool,scope,id);
+    assert.equal(preview.state,"previewed");assert.equal(preview.preview?.rows.accepted,1);assert.equal(preview.preview?.rows.rejected,1);
+    const html=await (await fetch(`${base}${location}`,{headers:{cookie:op.cookie}})).text();
+    assert.match(html,/Confirm these exact bytes/);assert.match(html,/timestamp_invalid/);
+    for(const hidden of ["synthetic-private-filename","synthetic-private-row-network","synthetic-dashboard-event","protected_ref"]) assert.equal(html.includes(hidden),false,hidden);
+    await assert.rejects(withTenant(readerPool,scope.tenantId,client=>client.query("SELECT protected_ref FROM ephemeral.managed_import_uploads")),/permission denied/);
+    await assert.rejects(readManagedUpload(appPool,{...scope,tenantId:"tenant-synthetic-outside"},id),/not_found/);
+    await assert.rejects(readManagedUpload(appPool,{...scope,appId:"app-synthetic-outside"},id),/not_found/);
+    const confirm=new URLSearchParams({csrf_token:op.csrf,confirmation_digest:preview.confirmation_digest});
+    assert.equal((await post(`/${id}/confirm`,new URLSearchParams({...Object.fromEntries(confirm),confirmation_digest:"changed"}))).status,409);
+    assert.equal((await post(`/${id}/confirm`,confirm)).status,303);
+    await processManagedImports(appPool,payloadStore,scope.tenantId);
+    const completed=await readManagedUpload(readerPool,scope,id);assert.equal(completed.state,"completed",completed.safe_reason ?? "");
+    assert.equal(completed.result?.accepted,1);assert.equal(completed.result?.rejected,1);
+    const after=await counts();assert.equal(after.logical-before.logical,1);assert.equal(after.imports-before.imports,1);
+    assert.equal((await post(`/${id}/confirm`,confirm)).status,303);await processManagedImports(appPool,payloadStore,scope.tenantId);
+    assert.deepEqual(await counts(),after);
+    const same=await createManagedUpload(appPool,payloadStore,scope,selection,bytes);
+    await processManagedImports(appPool,payloadStore,scope.tenantId);
+    const sameRow=await readManagedUpload(appPool,scope,same);
+    await confirmManagedUpload(appPool,payloadStore,scope,same,sameRow.confirmation_digest);
+    assert.equal((await readManagedUpload(appPool,scope,same)).result?.import_run_id,completed.result?.import_run_id);
+    assert.deepEqual(await counts(),after);
+
+    const changed=structuredClone(mapping);changed.provider="synthetic-changed-provider";
+    await registerImportMappingRevision({pool:appPool,payloadStore,scope,body:{...selection,revision:2,mapping:changed,approved_headers:headers}});
+    const conflict=await createManagedUpload(appPool,payloadStore,scope,{...selection,revision:2},bytes);
+    await processManagedImports(appPool,payloadStore,scope.tenantId);
+    const conflictRow=await readManagedUpload(appPool,scope,conflict);
+    await assert.rejects(confirmManagedUpload(appPool,payloadStore,scope,conflict,conflictRow.confirmation_digest),/binding_conflict/);
+    const corruptStore={write:payloadStore.write.bind(payloadStore),read:async(ref:string)=>ref.includes("managed-import-")?Buffer.from("corrupt"):payloadStore.read(ref),
+      purge:payloadStore.purge.bind(payloadStore),scanFor:payloadStore.scanFor.bind(payloadStore)};
+    // Choose the upload reference explicitly; storage-reference formats are private.
+    const reference=await withTenant(appPool,scope.tenantId,async client=>(await client.query("SELECT protected_ref FROM ephemeral.managed_import_uploads WHERE upload_id=$1",[conflict])).rows[0].protected_ref);
+    corruptStore.read=async(ref:string)=>ref===reference?Buffer.from("corrupt"):payloadStore.read(ref);
+    await assert.rejects(loadManagedUploadBytes(appPool,corruptStore,scope,conflictRow),/upload_changed/);
+    await assert.rejects(confirmManagedUpload(appPool,payloadStore,scope,conflict,conflictRow.confirmation_digest,new Date(Date.now()+2*86_400_000)),/expired/);
+    await sweepManagedUploads(appPool,payloadStore,scope.tenantId,new Date(Date.now()+2*86_400_000));
+    assert.equal((await readManagedUpload(appPool,scope,conflict)).state,"expired");
+    await assert.rejects(payloadStore.read(reference));
+
+    const cost:ImportMapping={version:"1.0.0",kind:"manual_cost",source_id:"synthetic-dashboard-cost",tenant_id:scope.tenantId,app_id:scope.appId,format:"csv",rules:[
+      {target:"network",expression:{source:"network"}},{target:"date",expression:{const:"2026-10-01"}},
+      {target:"as_of",expression:{const:"2026-10-02T00:00:00.000Z"}},
+      {target:"money",expression:{source:"amount",money:{input:"decimal",scale:6,currency_default:"USD"}}}]};
+    const costSelection={mapping_id:"synthetic-dashboard-cost",revision:1};
+    await registerImportMappingRevision({pool:appPool,payloadStore,scope,body:{...costSelection,mapping:cost,approved_headers:["network","amount"]}});
+    const costId=await createManagedUpload(appPool,payloadStore,scope,costSelection,Buffer.from("network,amount\nsynthetic-network,1.23\n"));
+    await processManagedImports(appPool,payloadStore,scope.tenantId);
+    const costRow=await readManagedUpload(appPool,scope,costId);assert.equal(costRow.preview?.execution_ready,true);
+    await confirmManagedUpload(appPool,payloadStore,scope,costId,costRow.confirmation_digest);
+    await processManagedImports(appPool,payloadStore,scope.tenantId);
+    assert.equal((await readManagedUpload(appPool,scope,costId)).state,"completed");assert.equal((await counts()).costs,1);
+    await confirmManagedUpload(appPool,payloadStore,scope,costId,costRow.confirmation_digest);assert.equal((await counts()).costs,1);
+
+    const pending=await createManagedUpload(appPool,payloadStore,scope,selection,bytes);
+    await processManagedImports(appPool,payloadStore,scope.tenantId);
+    const pendingRow=await readManagedUpload(appPool,scope,pending);
+    const pendingRef=await withTenant(appPool,scope.tenantId,async client=>(await client.query(
+      "SELECT protected_ref FROM ephemeral.managed_import_uploads WHERE upload_id=$1",[pending])).rows[0].protected_ref);
+    const deletion={tenant_id:scope.tenantId,app_id:scope.appId,requested_via:"tenant_admin_api" as const,
+      deletion_scope:"installation" as const,deletion_subject_ref:"installation:synthetic-csv-pending"};
+    await executePrivacyRequest(appPool,{...scope,keyId:"synthetic-privacy-key",role:"admin",
+      deletionSubjectDigest:privacySubjectDigest("synthetic-csv-privacy-digest",deletion)},deletion,payloadStore);
+    assert.equal((await readManagedUpload(appPool,scope,pending)).state,"blocked");
+    await assert.rejects(confirmManagedUpload(appPool,payloadStore,scope,pending,pendingRow.confirmation_digest),/preview_required/);
+    await assert.rejects(payloadStore.read(pendingRef));
+  } finally {
+    await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));await readerPool.end();
+  }
+});
+
+it("Issue 347 rolls back terminal publication on callback failure and retries fixed bytes without duplicate events", async () => {
+  const scope={tenantId:"tenant-synthetic-csv-retry",appId:"app-synthetic-csv-retry"};
+  await ensureAdminKeys(appPool,scope,["synthetic-csv-retry-admin-000000000000000001"]);
+  const mapping:ImportMapping=JSON.parse(readFileSync("examples/mappings/synthetic-optional-columns-click.json","utf8"));
+  Object.assign(mapping,{tenant_id:scope.tenantId,app_id:scope.appId,source_id:"synthetic-dashboard-retry"});
+  const selection={mapping_id:"synthetic-dashboard-retry",revision:1}, headers=["event_id","occurred_at","click_id","network"];
+  const now=new Date(), bytes=Buffer.from(`${headers.join(",")}\nsynthetic-retry-event,${now.toISOString()},synthetic-retry-click,\n`);
+  await registerImportMappingRevision({pool:appPool,payloadStore,scope,body:{...selection,mapping,approved_headers:headers}});
+  const id=await createManagedUpload(appPool,payloadStore,scope,selection,bytes);
+  await processManagedImports(appPool,payloadStore,scope.tenantId);
+  const row=await readManagedUpload(appPool,scope,id);
+  await confirmManagedUpload(appPool,payloadStore,scope,id,row.confirmation_digest,now);
+  await assert.rejects(runMmpImportSource({pool:appPool,mapping,sourceBytes:bytes,now,
+    onPublished:async()=>{throw new Error("synthetic-terminal-failure");}}),/synthetic-terminal-failure/);
+  await withTenant(appPool,scope.tenantId,async client=>{
+    assert.equal((await client.query("SELECT 1 FROM control.import_files WHERE tenant_id=$1",[scope.tenantId])).rowCount,0);
+    const receipt=(await client.query("SELECT result FROM control.managed_import_receipts WHERE tenant_id=$1",[scope.tenantId])).rows[0];assert.equal(receipt.result,null);
+    assert.equal((await client.query("SELECT 1 FROM ledger.logical_events WHERE tenant_id=$1",[scope.tenantId])).rowCount,1);
+  });
+  await assert.rejects(runMmpImportSource({pool:appPool,mapping,sourceBytes:bytes,now}),/managed_import_binding_required/);
+  await processManagedImports(appPool,payloadStore,scope.tenantId);
+  const completed=await readManagedUpload(appPool,scope,id);assert.equal(completed.state,"completed",completed.safe_reason ?? "");
+  await withTenant(appPool,scope.tenantId,async client=>{
+    assert.equal((await client.query("SELECT 1 FROM ledger.logical_events WHERE tenant_id=$1",[scope.tenantId])).rowCount,1);
+    assert.equal((await client.query("SELECT 1 FROM ledger.event_deliveries WHERE tenant_id=$1",[scope.tenantId])).rowCount,1);
+    assert.equal((await client.query("SELECT 1 FROM control.import_files WHERE tenant_id=$1",[scope.tenantId])).rowCount,1);
   });
 });
 

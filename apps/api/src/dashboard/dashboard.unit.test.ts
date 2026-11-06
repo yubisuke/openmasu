@@ -16,6 +16,24 @@ import { buildRetentionMatrices } from "./retention-matrix.js";
 import { parseCsv } from "@openmasu/runtime/import-normalization";
 import { standardRetentionMetricDefinitions } from "@openmasu/contracts/definitions";
 import { renderOperatorWebhookSigningKeyIssued } from "./action-pages.js";
+import { renderManagedImport, renderManagedImports } from "./imports.js";
+import type { ManagedUpload } from "@openmasu/runtime/managed-imports";
+
+it("managed CSV pages expose only aggregate previews and keep confirmation explicit", () => {
+  const row: ManagedUpload = { upload_id:"00000000-0000-7000-8000-000000000001",mapping_id:"synthetic-csv",revision:1,
+    mapping_digest:"a".repeat(64),source_digest:"b".repeat(64),confirmation_digest:"c".repeat(64),source_bytes:123,
+    state:"previewed",preview:{rows:{read:2,selected:2,filtered:0,accepted:1,rejected:1},
+      rejections:[{reason_code:"row_schema_invalid",count:1}],compatibility:"partial",execution_ready:true},
+    result:null,safe_reason:null,attempts:0,created_at:"2026-10-01T00:00:00.000Z",expires_at:"2026-10-02T00:00:00.000Z" };
+  const html=renderManagedImport("app-synthetic",row,"csrf-synthetic",true);
+  assert.match(html,/Confirm these exact bytes and mapping/);
+  assert.match(html,/row_schema_invalid: 1/);
+  assert.match(html,/not report comparability/);
+  assert.doesNotMatch(html,/<script|javascript:|\son\w+=/i);
+  assert.doesNotMatch(renderManagedImport("app-synthetic",row,"csrf",false),/<form/);
+  assert.doesNotMatch(renderManagedImport("app-synthetic",{...row,state:"completed"},"csrf",true),/<form/);
+  assert.match(renderManagedImports("app-synthetic",[],[],"csrf",true,true),/Register an immutable mapping revision/);
+});
 
 function metric(overrides: Partial<MetricReportRow> = {}): MetricReportRow {
   return {

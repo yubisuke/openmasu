@@ -4,6 +4,51 @@ Runtime import mappings are schema-validated JSON documents. Public files under 
 
 ## Private saved CSV mapping revisions
 
+### Dashboard upload, preview and confirmation
+
+From an app overview, choose **Preview and import CSV**. An administrator can
+register the same mapping-revision JSON described below; an operator selects
+an exact saved revision and uploads a UTF-8 CSV. The existing worker prepares
+a counts-only preview. Refresh the result page, review the accepted/rejected
+counts and reason codes, then choose **Confirm these exact bytes and mapping**.
+Uploading and previewing do not write measurement records or an import run.
+Registration, upload and confirmation are separate audited operations.
+
+The browser flow supports the existing `mmp_raw` and `manual_cost` CSV mappings,
+not a second mapper. Limits are 4 MiB per file, 10,000 rows, 64 KiB per normalized
+row and ten protected uploads per app. Invalid UTF-8, malformed CSV or missing
+required header sources are rejected before upload storage. Row-limit and row
+validation failures are reported by the worker without importing them. Cost
+preview must be execution-ready; an event CSV may contain rejected rows alongside
+accepted rows. Raw rows, source filenames, private column names and protected
+storage references never appear in the page or response.
+
+Upload bytes use the existing encrypted payload store. They cannot be confirmed
+after 24 hours; the worker purges expired and terminal uploads and removes their
+summary pages after seven days. Cleanup needs a running worker. App-scoped privacy
+requests conservatively invalidate and purge all pending uploads in that app,
+because the unimported CSV has no subject index. Tenant erasure covers all apps.
+Reader sessions can view summaries but cannot upload, confirm or read protected
+bytes. All mutations require the existing role, CSRF and Origin checks.
+
+Confirmation binds the scope, upload ID, source-byte SHA-256 and immutable mapping
+digest. A durable source-file receipt fixes the received timestamp before work
+starts. Reconfirmation and a new upload of the same file/revision return the
+stored result without another import. A different mapping for that same source
+and file conflicts; a legacy import without a managed receipt is not silently
+reinterpreted. CLI event imports and dashboard confirmation share a source-file
+lock, and the CLI cannot bypass an existing managed receipt. Terminal import
+metadata and the managed result commit together; event chunks keep their existing
+per-record atomicity and idempotency. Transient worker failures receive at most
+three attempts, bounded by upload expiry. This is not whole-file atomicity.
+
+The result shows its import-run reference, counts and links to saved metric
+schedules and reports. **Schema/mapping accepted** does not mean distinct logical
+events: existing duplicate/conflict, privacy and attribution rules still apply.
+Preview compatibility is not report comparability or provider completeness.
+Imports do not automatically compute new metric runs; select a saved schedule
+or use the existing metrics CLI, then compare reports separately.
+
 An app can store immutable, sequential mapping revisions for CSV `mmp_raw` and
 `manual_cost` inputs. This is an operator configuration registry, not an import
 or a provider certification. Existing local-file CLI mappings still support

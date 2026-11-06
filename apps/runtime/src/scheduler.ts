@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from "pg";
 import { uuidV7 } from "./index.js";
 
 export const SCHEDULED_WORKER_JOBS = [
+  "managed_import",
   "max_inbox",
   "sdk_inbox",
   "adservices_lookup",

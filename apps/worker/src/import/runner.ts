@@ -330,6 +330,36 @@ async function runPreparedMmpImport(options: {
   now?: Date;
   onPublished?: (client: PoolClient, summary: ImportSummary) => Promise<void>;
 }): Promise<ImportSummary> {
+  // Share the source-file lock with dashboard confirmation, including CLI imports.
+  // Otherwise a CLI import could publish between confirmation and worker execution.
+  const { mapping, fileDigest } = options.prepared;
+  const key = JSON.stringify([mapping.tenant_id, mapping.app_id, mapping.source_id, fileDigest]);
+  const lock = await options.pool.connect();
+  let lost: Error | undefined;
+  const onError = (error: Error) => { lost = error; };
+  lock.on("error", onError);
+  try {
+    await lock.query("SELECT pg_advisory_lock(hashtextextended($1,0))", [key]);
+    const receipt = await withTenant(options.pool, mapping.tenant_id, async client => (await client.query<{
+      mapping_digest: string; received_at: string;
+    }>(`SELECT mapping_digest,received_at FROM control.managed_import_receipts
+      WHERE tenant_id=$1 AND app_id=$2 AND source_id=$3 AND source_digest=$4`,
+    [mapping.tenant_id,mapping.app_id,mapping.source_id,fileDigest])).rows[0]);
+    if (receipt && (!options.onPublished || receipt.mapping_digest !== sha256(mapping)
+        || receipt.received_at !== canonicalNow(options.now))) throw new Error("managed_import_binding_required");
+    if (lost) throw lost;
+    return await executePreparedMmpImport(options);
+  } finally {
+    if (!lost) await lock.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [key]).catch(error => { lost = error; });
+    lock.removeListener("error", onError);
+    lock.release(lost);
+  }
+}
+
+async function executePreparedMmpImport(options: {
+  pool: Pool; prepared: PreparedMmpImport; now?: Date;
+  onPublished?: (client: PoolClient, summary: ImportSummary) => Promise<void>;
+}): Promise<ImportSummary> {
   const { mapping, loaded, fileDigest, sourceLabel } = options.prepared;
   if (mapping.kind !== "mmp_raw") throw new Error("runMmpImport requires an mmp_raw mapping");
   const now = canonicalNow(options.now);
