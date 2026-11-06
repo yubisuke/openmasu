@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { sha256 } from "@openmasu/attribution-core/canonical";
 import { type CandidateAttempt } from "@openmasu/attribution-core";
 import { validateEventPayload } from "@openmasu/contracts/validation";
@@ -328,6 +328,37 @@ async function runPreparedMmpImport(options: {
   pool: Pool;
   prepared: PreparedMmpImport;
   now?: Date;
+  onPublished?: (client: PoolClient, summary: ImportSummary) => Promise<void>;
+}): Promise<ImportSummary> {
+  // Share the source-file lock with dashboard confirmation, including CLI imports.
+  // Otherwise a CLI import could publish between confirmation and worker execution.
+  const { mapping, fileDigest } = options.prepared;
+  const key = JSON.stringify([mapping.tenant_id, mapping.app_id, mapping.source_id, fileDigest]);
+  const lock = await options.pool.connect();
+  let lost: Error | undefined;
+  const onError = (error: Error) => { lost = error; };
+  lock.on("error", onError);
+  try {
+    await lock.query("SELECT pg_advisory_lock(hashtextextended($1,0))", [key]);
+    const receipt = await withTenant(options.pool, mapping.tenant_id, async client => (await client.query<{
+      mapping_digest: string; received_at: string;
+    }>(`SELECT mapping_digest,received_at FROM control.managed_import_receipts
+      WHERE tenant_id=$1 AND app_id=$2 AND source_id=$3 AND source_digest=$4`,
+    [mapping.tenant_id,mapping.app_id,mapping.source_id,fileDigest])).rows[0]);
+    if (receipt && (!options.onPublished || receipt.mapping_digest !== sha256(mapping)
+        || receipt.received_at !== canonicalNow(options.now))) throw new Error("managed_import_binding_required");
+    if (lost) throw lost;
+    return await executePreparedMmpImport(options);
+  } finally {
+    if (!lost) await lock.query("SELECT pg_advisory_unlock(hashtextextended($1,0))", [key]).catch(error => { lost = error; });
+    lock.removeListener("error", onError);
+    lock.release(lost);
+  }
+}
+
+async function executePreparedMmpImport(options: {
+  pool: Pool; prepared: PreparedMmpImport; now?: Date;
+  onPublished?: (client: PoolClient, summary: ImportSummary) => Promise<void>;
 }): Promise<ImportSummary> {
   const { mapping, loaded, fileDigest, sourceLabel } = options.prepared;
   if (mapping.kind !== "mmp_raw") throw new Error("runMmpImport requires an mmp_raw mapping");
@@ -340,14 +371,18 @@ async function runPreparedMmpImport(options: {
   ));
   const runId = uuidV7(options.now?.valueOf());
   if (prior.rowCount) {
-    await withTenant(options.pool, mapping.tenant_id, (client) => client.query(
-      `INSERT INTO control.import_runs (
-        import_run_id, tenant_id, app_id, source_id, source_snapshot_digest,
-        status, started_at, completed_at
-      ) VALUES ($1,$2,$3,$4,$5,'skipped',$6,$6)`,
-      [runId, mapping.tenant_id, mapping.app_id, mapping.source_id, fileDigest, now],
-    ).then(() => undefined));
-    return { status: "skipped", import_run_id: runId, rows: loaded.rows.length, accepted: 0, rejected: 0, deliveries: 0, logical_events: 0 };
+    const summary: ImportSummary = { status: "skipped", import_run_id: runId, rows: loaded.rows.length, accepted: 0, rejected: 0, deliveries: 0, logical_events: 0 };
+    await withTenant(options.pool, mapping.tenant_id, async (client) => {
+      await client.query(
+        `INSERT INTO control.import_runs (
+          import_run_id, tenant_id, app_id, source_id, source_snapshot_digest,
+          status, started_at, completed_at
+        ) VALUES ($1,$2,$3,$4,$5,'skipped',$6,$6)`,
+        [runId, mapping.tenant_id, mapping.app_id, mapping.source_id, fileDigest, now],
+      );
+      await options.onPublished?.(client, summary);
+    });
+    return summary;
   }
 
   const attemptRows: Array<{ ordinal: number; attempt: CandidateAttempt }> = [];
@@ -404,6 +439,11 @@ async function runPreparedMmpImport(options: {
         fields: [...failure.fields],
       })),
     ];
+    const summary: ImportSummary = {
+      status: "completed", import_run_id: runId, rows: loaded.rows.length,
+      accepted: acceptedRows.length, rejected: allFailures.length,
+      deliveries, logical_events: logicalEvents,
+    };
     // import_runs is append-only: publish the terminal state in the same transaction as
     // the file, attempt, and row-rejection artifacts instead of mutating a running row.
     await withTenant(options.pool, mapping.tenant_id, async (client) => {
@@ -437,13 +477,10 @@ async function runPreparedMmpImport(options: {
         import_rejection_id,import_run_id,tenant_id,app_id,source_id,row_ordinal,reason_code,field_names,occurred_at)
         SELECT import_rejection_id,import_run_id,tenant_id,app_id,source_id,row_ordinal,reason_code,field_names,occurred_at
         FROM jsonb_populate_recordset(NULL::control.import_row_rejections,$1::jsonb)`);
+      await options.onPublished?.(client, summary);
     });
     console.log(`Import ${sourceLabel}: rows=${loaded.rows.length} accepted=${acceptedRows.length} rejected=${allFailures.length}`);
-    return {
-      status: "completed", import_run_id: runId, rows: loaded.rows.length,
-      accepted: acceptedRows.length, rejected: allFailures.length,
-      deliveries, logical_events: logicalEvents,
-    };
+    return summary;
   } catch (error) {
     // Projection writes are transaction-scoped per logical record. A terminal failed run
     // still records the source snapshot without requiring UPDATE permission.
@@ -465,11 +502,14 @@ export async function runMmpImportSource(options: {
   sourceLabel?: string;
   limits?: ImportLimits;
   now?: Date;
+  /** Runs inside the completed/skipped metadata transaction, before commit. */
+  onPublished?: (client: PoolClient, summary: ImportSummary) => Promise<void>;
 }): Promise<ImportSummary> {
   if (options.mapping.kind !== "mmp_raw") throw new Error("runMmpImport requires an mmp_raw mapping");
   return runPreparedMmpImport({
     pool: options.pool,
     now: options.now,
+    onPublished: options.onPublished,
     prepared: {
       mapping: options.mapping,
       loaded: readRowsFromSource(options.sourceBytes, options.mapping, options.limits ?? limitsFromEnvironment()),

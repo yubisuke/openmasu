@@ -15,6 +15,7 @@ import { createComparisonsControllers } from "./comparisons.js";
 import { createSyntheticValidationControllers } from "./synthetic-validations.js";
 import { createEventCatalogControllers } from "./event-catalog.js";
 import { createImportMappingsControllers } from "./import-mappings.js";
+import { createImportsControllers } from "./imports.js";
 
 export type HandlerRegistry = Readonly<Record<RouteHandler, RegisteredController>>;
 
@@ -37,6 +38,7 @@ export function assertHandlerRegistry(registry: Readonly<Partial<Record<RouteHan
 export function createHandlerRegistry(dependencies: RequestHandlerDependencies): HandlerRegistry {
   const registry = {
     ...createImportMappingsControllers({ payloadStore: dependencies.payloadStore }),
+    ...createImportsControllers({ pool:dependencies.pool,readerPool:dependencies.readerPool,dashboard:dependencies.dashboard,payloadStore:dependencies.payloadStore }),
     ...createEventCatalogControllers({ pool: dependencies.pool, readerPool: dependencies.readerPool, dashboard: dependencies.dashboard }),
     ...createSyntheticValidationControllers({ pool: dependencies.pool, readerPool: dependencies.readerPool, dashboard: dependencies.dashboard }),
     ...createComparisonsControllers({ readerPool: dependencies.readerPool, pool: dependencies.pool, dashboard: dependencies.dashboard }),

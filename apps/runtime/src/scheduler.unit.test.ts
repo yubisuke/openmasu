@@ -30,6 +30,7 @@ class FakeStore implements SchedulerStore {
 describe("durable worker scheduler", () => {
   it("keeps the worker job vocabulary closed and the policy bounded", () => {
     assert.deepEqual(SCHEDULED_WORKER_JOBS, [
+      "managed_import",
       "max_inbox", "sdk_inbox", "adservices_lookup", "integrity_verification",
       "google_play_verification", "commerce_readback", "google_conversion_delivery",
       "operator_webhook_delivery",

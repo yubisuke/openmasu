@@ -19,6 +19,8 @@ import {
 } from "./adapters.js";
 import { normalizeMaxAggregateRevenue } from "./max-revenue.js";
 import { runGoogleCostImport } from "./google-cost-cli.js";
+import { prepareCostImportSource, runCostImportSource, runCostImportFile } from "./cost-cli.js";
+import { analyzeManualCostImportSource, buildManualCostCompatibilityReport } from "./cost-compatibility.js";
 import { mappingsForLint, previewMmpImport, runMmpImport } from "./runner.js";
 import {
   reportImportCompatibility,
@@ -191,6 +193,34 @@ describe("runtime import mapping", () => {
       const loaded = readRows(file, mapping, { maxBytes: 4096, maxRows: 2, maxRowBytes: 1024 });
       assert.equal(loaded.rows[0].network, "network, one");
       assert.throws(() => readRows(file, mapping, { maxBytes: 4096, maxRows: 2, maxRowBytes: 2 }), /exceeds 2 bytes/);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it("normalizes protected cost bytes and the existing file wrapper into identical sorted ledger rows", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "openmasu-cost-bytes-"));
+    try {
+      const mappingPath = "examples/mappings/synthetic-manual-cost.json", mapping = loadMapping(mappingPath);
+      const sourceBytes = Buffer.from([
+        "network,campaign_id,country,date,cost_micros,currency,as_of",
+        "synthetic-network,synthetic-z,us,2026-08-20,2000000,USD,2026-08-21T00:00:00.000Z",
+        "synthetic-network,synthetic-a,us,2026-08-20,1000000,USD,2026-08-21T00:00:00.000Z",
+      ].join("\n"));
+      const normalized = prepareCostImportSource({ mapping, sourceBytes });
+      assert.deepEqual(normalized.map(row => [row.campaign_id, row.country, row.amount_unscaled]),
+        [["synthetic-a", "US", "1000000"], ["synthetic-z", "US", "2000000"]]);
+      const published: unknown[] = [];
+      const pool = { connect: async () => ({ release() {}, query: async (sql: string, values?: unknown[]) => {
+        if (sql.includes("INSERT INTO ledger.cost_records")) published.push(JSON.parse(values![16] as string));
+        return { rowCount: 1, rows: sql.includes("SELECT count(*)") ? [{ count: 2 }] : [] };
+      } }) } as unknown as Pool;
+      const bytesResult = await runCostImportSource({ pool, mapping, sourceBytes });
+      const fromBytes = published.splice(0);
+      const filePath = join(directory, "synthetic.csv"); writeFileSync(filePath, sourceBytes);
+      const fileResult = await runCostImportFile({ pool, mappingPath, filePath });
+      assert.deepEqual(published, fromBytes);
+      for (const result of [bytesResult, fileResult])
+        assert.deepEqual({ inserted: result.inserted, current: result.current, rows: result.rows }, { inserted: 2, current: 2, rows: 2 });
+      assert.throws(() => prepareCostImportSource({ mapping, sourceBytes, limits: { maxBytes: 1, maxRows: 2, maxRowBytes: 1024 } }), /exceeds 1 bytes/);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
@@ -482,6 +512,12 @@ describe("runtime import mapping", () => {
       assert.equal(report.compatibility.kind, "manual_cost");
       assert.equal(report.compatibility.status, "compatible");
       assert.equal(report.compatibility.execution_ready, true);
+      const byteAnalysis = analyzeManualCostImportSource({
+        mapping: loadMapping("examples/mappings/synthetic-manual-cost.json"), sourceBytes: readFileSync(file),
+      });
+      assert.deepEqual(buildManualCostCompatibilityReport(byteAnalysis), report.compatibility);
+      assert.deepEqual(byteAnalysis.rows, report.rows);
+      assert.deepEqual(byteAnalysis.rejections, report.rejections);
       assert.deepEqual(report.rows, { read: 1, selected: 1, filtered: 0, accepted: 1, rejected: 0 });
       assert.deepEqual(report.compatibility.money, {
         input: "integer", scale: 6, currency_origin: "source",
@@ -498,6 +534,10 @@ describe("runtime import mapping", () => {
       assert.equal(serialized.includes(privateCampaign), false);
       assert.equal(serialized.includes("cost_micros"), false);
       assert.equal(serialized.includes(file), false);
+      const byteReport = JSON.stringify({ rows: byteAnalysis.rows, rejections: byteAnalysis.rejections,
+        compatibility: buildManualCostCompatibilityReport(byteAnalysis) });
+      for (const privateValue of [privateNetwork, privateCampaign, "cost_micros", file])
+        assert.equal(byteReport.includes(privateValue), false);
       assert.equal(reportImportCompatibility({
         mappingPath: "examples/mappings/synthetic-manual-cost.json",
         filePath: file,
@@ -523,6 +563,10 @@ describe("runtime import mapping", () => {
       assert.deepEqual(partial.rejections, [
         { reason_code: "cost_date_invalid", count: 1, fields: ["date"] },
       ]);
+      const mapping = loadMapping("examples/mappings/synthetic-manual-cost.json");
+      const partialBytes = readFileSync(partialFile);
+      assert.deepEqual(buildManualCostCompatibilityReport(analyzeManualCostImportSource({ mapping, sourceBytes: partialBytes })), partial.compatibility);
+      assert.throws(() => prepareCostImportSource({ mapping, sourceBytes: partialBytes }), /valid YYYY-MM-DD/);
 
       const duplicateFile = join(directory, "duplicate.csv");
       writeFileSync(duplicateFile, [
@@ -539,6 +583,9 @@ describe("runtime import mapping", () => {
       assert.deepEqual(duplicate.compatibility.checks.at(-1), {
         code: "retained_dimension_uniqueness", status: "fail", count: 1,
       });
+      const duplicateBytes = readFileSync(duplicateFile);
+      assert.deepEqual(buildManualCostCompatibilityReport(analyzeManualCostImportSource({ mapping, sourceBytes: duplicateBytes })), duplicate.compatibility);
+      assert.throws(() => prepareCostImportSource({ mapping, sourceBytes: duplicateBytes }), /duplicate retained dimension key/);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 

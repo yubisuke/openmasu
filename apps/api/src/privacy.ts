@@ -523,7 +523,17 @@ export async function executePrivacyRequest(
           })],
       );
     }
+    // Unindexed CSVs may contain the subject in any row. Conservatively invalidate
+    // every still-protected upload in the app (all apps for tenant erasure).
+    const managedUploads = await client.query<{ protected_ref: string }>(`SELECT protected_ref
+      FROM ephemeral.managed_import_uploads WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3)
+        AND protected_ref IS NOT NULL FOR UPDATE`, [body.tenant_id,body.deletion_scope,body.app_id]);
+    await client.query(`UPDATE ephemeral.managed_import_uploads SET protected_ref=NULL,
+      state=CASE WHEN state='completed' THEN state ELSE 'blocked' END,safe_reason='privacy_requested'
+      WHERE tenant_id=$1 AND ($2='tenant' OR app_id=$3) AND protected_ref IS NOT NULL`,
+    [body.tenant_id,body.deletion_scope,body.app_id]);
     const protectedReferences = [...new Set([
+      ...managedUploads.rows.map(payload => payload.protected_ref),
       ...rawPayloads.rows.map((payload) => payload.raw_payload_ref),
       ...payloads.rows.map((payload) => payload.raw_query_ref),
       ...batchPayloads.rows.map((payload) => payload.body_ref),

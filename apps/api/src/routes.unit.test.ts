@@ -14,6 +14,18 @@ import {
 } from "./routes.js";
 
 describe("declarative API route security", () => {
+  it("keeps CSV uploads and confirmation behind scoped dashboard roles", () => {
+    for (const [method, suffix, handler, capability, mutates] of [
+      ["GET", "", "dashboard_imports_list", "read", false],
+      ["GET", "/synthetic-upload", "dashboard_imports_read", "read", false],
+      ["POST", "", "dashboard_imports_upload", "operate", true],
+      ["POST", "/synthetic-upload/confirm", "dashboard_imports_confirm", "operate", true],
+      ["POST", "/mappings", "dashboard_imports_register_mapping", "administer", true],
+    ] as const) {
+      const route = matchRoute(method, `/dashboard/apps/app-a/imports${suffix}`)!;
+      assert.deepEqual([route.handler,route.auth,route.capability,route.mutates],[handler,"dashboard_session",capability,mutates]);
+    }
+  });
   it("separates managed mapping administration, private previews, and reader metadata", () => {
     for (const [method, suffix, handler, capability, mutates] of [
       ["GET", "", "admin_import_mappings_list", "read", false],

@@ -82,8 +82,10 @@ with complete-window schedule lags and bounded same-horizon companion correction
 old D7 definitions and saved artifacts remain unchanged.
 The [private CSV mapping registry](import-mappings.md#private-saved-csv-mapping-revisions)
 adds app-scoped immutable revisions and header-drift preview without replacing
-the existing local-file CLI. Registration does not import rows; browser CSV
-upload and confirmation-bound execution remain a follow-up operator workflow.
+the existing local-file CLI. The browser now selects a saved revision, uploads a
+bounded CSV, previews aggregate counts and explicitly confirms its bytes before
+the existing worker imports it. Registration and preview alone do not import
+rows; result pages separate import success from report comparability.
 Follow open child dependencies in the backlog, not the closed functional plan.
 Provider access and privacy-policy decisions remain a separate owner boundary.
 

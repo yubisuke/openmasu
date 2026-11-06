@@ -2,6 +2,11 @@ export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "privacy_receip
 export type RouteCapability = "read" | "operate" | "administer";
 
 export type RouteHandler =
+  | "dashboard_imports_list"
+  | "dashboard_imports_read"
+  | "dashboard_imports_upload"
+  | "dashboard_imports_confirm"
+  | "dashboard_imports_register_mapping"
   | "admin_import_mappings_list"
   | "admin_import_mappings_register"
   | "admin_import_mappings_preview"
@@ -178,6 +183,11 @@ function exactPathPattern(path: string): RegExp {
 }
 
 export const routes: readonly RouteDefinition[] = [
+  { handler: "dashboard_imports_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/imports$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_imports_read", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/imports\/[^/]+$/, auth: "dashboard_session", mutates: false, capability: "read" },
+  { handler: "dashboard_imports_upload", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/imports$/, auth: "dashboard_session", mutates: true, capability: "operate" },
+  { handler: "dashboard_imports_confirm", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/imports\/[^/]+\/confirm$/, auth: "dashboard_session", mutates: true, capability: "operate" },
+  { handler: "dashboard_imports_register_mapping", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/imports\/mappings$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "admin_import_mappings_list", method: "GET", pattern: /^\/v1\/admin\/apps\/[^/]+\/import-mappings$/, auth: "admin_bearer", mutates: false, capability: "read" },
   { handler: "admin_import_mappings_register", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/import-mappings$/, auth: "admin_bearer", mutates: true, capability: "administer" },
   // A private-reference read needs the app pool, but the preview service performs no writes.

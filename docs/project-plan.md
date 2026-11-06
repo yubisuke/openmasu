@@ -50,8 +50,9 @@ The [private CSV mapping registry](import-mappings.md#private-saved-csv-mapping-
 adds app-scoped immutable sequential revisions, protected definitions and
 counts-only header drift. Explicit revision selection, idempotent registration
 and read-only preview preserve the existing CLI and DSL semantics. Browser CSV
-upload and confirmation-bound execution remain follow-up work; a saved mapping
-does not itself import data or establish provider comparability.
+upload, aggregate preview, exact-byte confirmation and stored results now reuse
+the existing worker. A saved mapping or successful import does not itself
+establish report comparability; metric computation remains a separate action.
 Outbound webhooks keep stable event/subject references while rotating the signing
 key on the same destination. Bounded overlap, explicit retirement and queued
 revision binding reuse the existing encrypted outbox and administrator controls.

@@ -76,6 +76,12 @@ Docker with Compose is needed only for the runtime path.
 
 ### Offline walkthrough
 
+For an already running synthetic runtime, app overview → **Preview and import
+CSV** provides mapping-revision selection, counts-only preview, explicit
+confirmation and stored results for raw events and manual cost. See the
+[CSV import guide](docs/import-mappings.md#dashboard-upload-preview-and-confirmation).
+Import success and report comparability remain separate checks.
+
 ```bash
 npm ci
 npm run --silent demo:shadow -- --comparison-dir=build/first-comparison

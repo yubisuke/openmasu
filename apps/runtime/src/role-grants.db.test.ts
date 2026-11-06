@@ -16,6 +16,7 @@ type Row = {
 
 const privileges: Privilege[] = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"];
 const readerNoTableSelect = new Set([
+  "control.managed_import_receipts",
   "control.import_mapping_revisions",
   "control.worker_tenant_cycles",
   "control.retention_items",
@@ -52,6 +53,7 @@ const readerNoTableSelect = new Set([
   "ephemeral.operator_bulk_export_batches",
 ]);
 const seedControlTruncate = new Set([
+  "control.managed_import_receipts",
   "control.import_mapping_revisions",
   "control.operator_webhook_signing_revisions", "control.operator_webhook_signing_retirements",
   "control.operator_bulk_export_credential_revisions",
@@ -103,6 +105,9 @@ const seedControlTruncate = new Set([
   "control.worker_job_schedules",
 ]);
 const ephemeralExpected = new Map<string, Record<Role, Privilege[]>>([
+  ["ephemeral.managed_import_uploads", {
+    openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: [], openmasu_seed: ["TRUNCATE"],
+  }],
   ["ephemeral.synthetic_validation_sessions", {
     openmasu_app: ["SELECT", "INSERT", "UPDATE", "DELETE"], openmasu_reader: ["SELECT"], openmasu_seed: ["TRUNCATE"],
   }],
@@ -155,6 +160,7 @@ function expected(row: Row): Privilege[] {
     return row.role_name === "openmasu_seed" ? ["SELECT", "INSERT", "UPDATE", "DELETE"] : [];
   }
   if (row.role_name === "openmasu_app") {
+    if (qualified === "control.managed_import_receipts") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.comparison_notifications") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.cost_backfill_days") return ["SELECT", "INSERT", "UPDATE"];
     if (qualified === "control.worker_heartbeats") return ["SELECT", "INSERT", "UPDATE"];
@@ -388,6 +394,10 @@ try {
     has_column_privilege('openmasu_reader','control.import_mapping_revisions',column_name,'SELECT') AS allowed
     FROM information_schema.columns WHERE table_schema='control' AND table_name='import_mapping_revisions'`);
   for (const row of mappingColumns.rows) assert.equal(row.allowed, row.column_name !== "protected_ref", `import mapping reader column drift: ${row.column_name}`);
+  const uploadColumns = await pool.query<{ column_name: string; allowed: boolean }>(`SELECT column_name,
+    has_column_privilege('openmasu_reader','ephemeral.managed_import_uploads',column_name,'SELECT') AS allowed
+    FROM information_schema.columns WHERE table_schema='ephemeral' AND table_name='managed_import_uploads'`);
+  for (const row of uploadColumns.rows) assert.equal(row.allowed, row.column_name !== "protected_ref", `managed upload reader column drift: ${row.column_name}`);
   const costColumns = await pool.query<{ column_name: string; allowed: boolean }>(`
     SELECT column_name,has_column_privilege('openmasu_reader','control.cost_schedules',column_name,'SELECT') AS allowed
     FROM information_schema.columns WHERE table_schema='control' AND table_name='cost_schedules'

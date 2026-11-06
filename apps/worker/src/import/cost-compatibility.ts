@@ -2,7 +2,7 @@ import { prepareCostImportRows, type CostInput } from "./cost.js";
 import { CostInputError, normalizeCostInput, type CostInputRejectionCode } from "./cost-cli.js";
 import { declaredMappingTargetFields, type ImportCompatibilityStatus } from "./compatibility.js";
 import { loadMapping, mapRow, MappingError, rowMatches, type ImportMapping } from "./mapping.js";
-import { readRows, type ImportLimits } from "./source.js";
+import { readRows, readRowsFromSource, type ImportLimits } from "./source.js";
 
 type Any = Record<string, any>;
 
@@ -90,18 +90,9 @@ function groupRejections(values: Array<{ reason_code: ManualCostRejectionCode; f
   return [...groups.values()].sort((left, right) => left.reason_code.localeCompare(right.reason_code));
 }
 
-export function analyzeManualCostImport(options: {
-  mappingPath: string;
-  filePath: string;
-  limits?: ImportLimits;
-}): ManualCostCompatibilityAnalysis {
-  const mapping = loadMapping(options.mappingPath);
-  if (mapping.kind !== "manual_cost") throw new Error("manual cost compatibility requires a manual_cost mapping");
-  const loaded = readRows(options.filePath, mapping, options.limits ?? {
-    maxBytes: 4 * 1024 * 1024 * 1024,
-    maxRows: 20_000_000,
-    maxRowBytes: 64 * 1024,
-  });
+const defaultLimits: ImportLimits = { maxBytes: 4 * 1024 * 1024 * 1024, maxRows: 20_000_000, maxRowBytes: 64 * 1024 };
+
+function analyzeLoadedManualCostImport(mapping: ImportMapping, loaded: { rows: Any[] }): ManualCostCompatibilityAnalysis {
   const selectedRows = loaded.rows.filter((row) => rowMatches(mapping, row));
   const acceptedRows: CostInput[] = [];
   const rawRejections: Array<{ reason_code: ManualCostRejectionCode; fields: string[] }> = [];
@@ -152,6 +143,26 @@ export function analyzeManualCostImport(options: {
     observedFieldCounts,
     duplicateDimensions,
   };
+}
+
+export function analyzeManualCostImportSource(options: {
+  mapping: ImportMapping;
+  sourceBytes: Uint8Array;
+  limits?: ImportLimits;
+}): ManualCostCompatibilityAnalysis {
+  if (options.mapping.kind !== "manual_cost") throw new Error("manual cost compatibility requires a manual_cost mapping");
+  return analyzeLoadedManualCostImport(options.mapping,
+    readRowsFromSource(options.sourceBytes, options.mapping, options.limits ?? defaultLimits));
+}
+
+export function analyzeManualCostImport(options: {
+  mappingPath: string;
+  filePath: string;
+  limits?: ImportLimits;
+}): ManualCostCompatibilityAnalysis {
+  const mapping = loadMapping(options.mappingPath);
+  if (mapping.kind !== "manual_cost") throw new Error("manual cost compatibility requires a manual_cost mapping");
+  return analyzeLoadedManualCostImport(mapping, readRows(options.filePath, mapping, options.limits ?? defaultLimits));
 }
 
 export function buildManualCostCompatibilityReport(
