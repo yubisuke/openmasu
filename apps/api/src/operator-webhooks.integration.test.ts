@@ -23,6 +23,7 @@ import { createRequestHandler } from "./router.js";
 import { signServerRequest } from "./server-auth.js";
 import { rotateOperatorWebhookSigningKey, retireOperatorWebhookSigningKey } from "./operator-webhooks-admin.js";
 import { previewWebhookContent } from "@openmasu/runtime/webhook-content";
+import { previewWebhookRecovery, confirmWebhookRecovery } from "@openmasu/runtime/operator-webhook-recovery";
 
 const reviewedPolicy = previewWebhookContent({ mode: "explicit_v1", custom_events: { synthetic_operator_callback: "synthetic_operator_callback" }, event_names: {}, share_money: true });
 const reviewedContent = { content_policy: reviewedPolicy.policy, preview_digest: reviewedPolicy.preview_digest };
@@ -52,6 +53,7 @@ let deliverStatuses = [500, 204];
 let comparisonStatuses = [500, 204];
 let rotationStatuses = [500, 204];
 let deletionStatuses = [503, 204];
+let recoveryStatuses: number[] = [];
 let raceGate: {
   entered: Promise<void>;
   release: Promise<void>;
@@ -141,7 +143,8 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
         raceGate.markEntered();
         await raceGate.release;
       }
-      const status = request.url === "/deliver" ? (deliverStatuses.shift() ?? 204)
+      const status = request.url === "/recovery" ? (recoveryStatuses.shift() ?? 204)
+        : request.url === "/deliver" ? (deliverStatuses.shift() ?? 204)
         : request.url === "/comparison" ? (comparisonStatuses.shift() ?? 204)
         : request.url === "/rotation" ? (rotationStatuses.shift() ?? 204)
         : request.url === "/deletion" && JSON.parse(Buffer.concat(chunks).toString()).schema === "openmasu.subject_deletion.v1"
@@ -283,6 +286,85 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     assert.equal((await admin(`${base}/${encodeURIComponent(destination.destination_id)}/disable`, { method: "POST", body: "{}" })).status, 200);
   });
 
+  it("recovers terminal webhook bytes once and refuses deleted, expired, active, mismatched and successful deliveries", async () => {
+    const registered = await admin(`/v1/admin/apps/${appId}/operator-webhooks`, { method:"POST", body:JSON.stringify({
+      endpoint_url:`${receiverOrigin}/recovery`,events:["custom_event"],...reviewedContent }) });
+    assert.equal(registered.status,201);
+    const destination = await registered.json() as {destination_id:string};
+    const row = (id: string) => withTenant(pool,tenantId,async c=>(await c.query<{
+      delivery_id:string;record_id:string;request_ref:string;request_digest:string;attempts:number;state:string;
+    }>(`SELECT delivery_id,record_id,request_ref,request_digest,attempts,state FROM ephemeral.operator_webhook_deliveries
+      WHERE tenant_id=$1 AND app_id=$2 AND destination_id=$3 AND ($4::uuid IS NULL OR delivery_id=$4)
+      ORDER BY created_at DESC,delivery_id DESC LIMIT 1`,[tenantId,appId,destination.destination_id,id || null])).rows[0]);
+    const dispatch = () => processOperatorWebhookDeliveries(pool,payloadStore,tenantId,{enabled:true,
+      destinationAllowlist:[receiverOrigin],allowSyntheticLoopback:true,maximumAttempts:1,now:()=>new Date(Date.now()+5000)});
+    const failed = async (suffix:string) => {
+      const installation=`installation:recovery:${suffix}:${run}`;
+      assert.equal((await submit(`event:recovery:${suffix}:${run}`,installation)).status,202);
+      await processSdkInbox(pool,payloadStore,tenantId);
+      await discoverOperatorWebhookDeliveries(pool,payloadStore,tenantId);
+      recoveryStatuses=[400]; await dispatch();
+      const value=await row(""); assert.equal(value.state,"failed");
+      await assert.rejects(payloadStore.read(value.request_ref));
+      return {...value,installation};
+    };
+    const path=(id:string)=>`/v1/admin/apps/${appId}/operator-webhook-deliveries/${id}`;
+    const preview = async(id:string) => {
+      const response=await admin(`${path(id)}/recovery-preview`,{method:"POST",body:"{}"});
+      assert.equal(response.status,200,await response.clone().text());
+      return response.json() as Promise<{preview_id:string;receipt:string;request_digest:string}>;
+    };
+    const confirm=(id:string,p:{preview_id:string;receipt:string})=>admin(`${path(id)}/recovery-confirm`,{
+      method:"POST",body:JSON.stringify({preview_id:p.preview_id,receipt:p.receipt})});
+    const initial=await failed("success"), original=received.find(item=>item.deliveryId===initial.delivery_id)!;
+    const p=await preview(initial.delivery_id);
+    assert.equal(p.request_digest,initial.request_digest);
+    assert.doesNotMatch(JSON.stringify(p),/encrypted:|installation:|event:|secret_ref/);
+    assert.equal((await admin(`${path(initial.delivery_id)}/recovery-preview`,{method:"POST",body:"{}",
+      headers:{authorization:`Bearer ${operatorKey}`}})).status,403);
+    assert.equal((await admin(`${path(initial.delivery_id)}/recovery-preview`.replace(appId,"app-unavailable"),{method:"POST",body:"{}"})).status,404);
+    assert.equal((await confirm(initial.delivery_id,p)).status,202);
+    assert.equal((await (await confirm(initial.delivery_id,p)).json()).status,"already_requested");
+    recoveryStatuses=[204]; await dispatch();
+    const attempts=received.filter(item=>item.deliveryId===initial.delivery_id);
+    assert.equal(attempts.length,2); assert.deepEqual(attempts[1].body,original.body);
+    assert.equal(attempts[1].signature,original.signature); assert.equal((await row(initial.delivery_id)).state,"succeeded");
+    assert.equal((await admin(`${path(initial.delivery_id)}/recovery-preview`,{method:"POST",body:"{}"})).status,409);
+    const results=await withTenant(pool,tenantId,async c=>(await c.query(`SELECT state,attempt FROM ledger.operator_webhook_delivery_results
+      WHERE tenant_id=$1 AND delivery_id=$2 ORDER BY attempt`,[tenantId,initial.delivery_id])).rows);
+    assert.deepEqual(results,[{state:"failed",attempt:1},{state:"succeeded",attempt:2}]);
+    assert.equal((await withTenant(pool,tenantId,c=>c.query(`SELECT 1 FROM ledger.audit_logs WHERE tenant_id=$1 AND target_ref=$2
+      AND action='operator_webhook_recovery_confirmed'`,[tenantId,initial.delivery_id]))).rowCount,1);
+    const pending=await failed("guards"), checks=await preview(pending.delivery_id);
+    const options={pool,payloadStore,scope:{tenantId,appId,keyId:"synthetic-recovery"},deliveryId:pending.delivery_id};
+    await assert.rejects(confirmWebhookRecovery({...options,previewId:checks.preview_id,receipt:checks.receipt,
+      now:new Date(Date.now()+600_001)}),/preview_expired/);
+    const locker=await pool.connect();
+    try {
+      await locker.query("BEGIN");
+      await locker.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`openmasu:operator-webhook:${pending.record_id}`]);
+      assert.equal((await confirm(pending.delivery_id,checks)).status,409);
+      await assert.rejects(previewWebhookRecovery(options),/busy/);
+    } finally {await locker.query("ROLLBACK");locker.release();}
+    await withTenant(pool,tenantId,c=>c.query("UPDATE ephemeral.operator_webhook_deliveries SET request_digest=$3 WHERE tenant_id=$1 AND delivery_id=$2",[tenantId,pending.delivery_id,"a".repeat(64)]));
+    await assert.rejects(previewWebhookRecovery(options),/digest_mismatch/);
+    await withTenant(pool,tenantId,c=>c.query("UPDATE ephemeral.operator_webhook_deliveries SET request_digest=$3 WHERE tenant_id=$1 AND delivery_id=$2",[tenantId,pending.delivery_id,pending.request_digest]));
+    const deleted=await admin("/v1/admin/privacy-requests",{method:"POST",body:JSON.stringify({tenant_id:tenantId,app_id:appId,
+      requested_via:"tenant_admin_api",deletion_scope:"installation",deletion_subject_ref:pending.installation})});
+    assert.equal(deleted.status,201);
+    const denied=await confirm(pending.delivery_id,checks); assert.equal(denied.status,409);
+    assert.equal((await denied.json()).error,"webhook_recovery_evidence_unavailable");
+    const expired=await failed("retention");
+    const raw=await withTenant(pool,tenantId,async c=>(await c.query<{raw_payload_ref:string}>("SELECT raw_payload_ref FROM ledger.raw_records WHERE tenant_id=$1 AND record_id=$2",[tenantId,expired.record_id])).rows[0]);
+    await payloadStore.purge(raw.raw_payload_ref);
+    await assert.rejects(previewWebhookRecovery({...options,deliveryId:expired.delivery_id}),/evidence_unavailable/);
+    const keyExpired=await failed("key");
+    await rotateOperatorWebhookSigningKey({pool,payloadStore,identity:{tenantId,appId,keyId:"synthetic-recovery",role:"admin"},
+      destinationId:destination.destination_id,body:{expected_revision:1,overlap_seconds:0}});
+    await assert.rejects(previewWebhookRecovery({...options,deliveryId:keyExpired.delivery_id}),/signing_unavailable/);
+    assert.equal((await admin(`/v1/admin/apps/${appId}/operator-webhooks/${encodeURIComponent(destination.destination_id)}/disable`,{method:"POST",body:"{}"})).status,200);
+  });
+
   it("comparison notifications reuse durable signed delivery, deduplicate state, coalesce cooldown, and suppress mute and privacy", async () => {
     const scope = { tenantId,appId }, commandPath = `/v1/admin/apps/${appId}/comparisons`;
     const clock = (day:number,seconds=0) => new Date(Date.parse(`2026-10-${String(day).padStart(2,"0")}T00:00:00Z`)+seconds*1000);
@@ -316,7 +398,11 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     assert.equal(await discoverComparisonNotifications(pool,payloadStore,tenantId,clock(10)),0);
     const dispatch=(now:Date,extra:Record<string,unknown>={})=>processOperatorWebhookDeliveries(pool,payloadStore,tenantId,{
       enabled:true,destinationAllowlist:[receiverOrigin],allowSyntheticLoopback:true,now:()=>now,...extra });
-    assert.equal((await dispatch(clock(10))).processed,1);
+    assert.equal((await dispatch(clock(10),{maximumAttempts:1})).processed,1);
+    const recoveryOptions={pool,payloadStore,scope:{...scope,keyId:"synthetic-comparison-recovery"},deliveryId:(await withTenant(pool,tenantId,
+      async c=>(await c.query<{delivery_id:string}>("SELECT delivery_id FROM ephemeral.operator_webhook_deliveries WHERE tenant_id=$1 AND comparison_id=$2",[tenantId,saved.comparison_id])).rows[0])).delivery_id,now:clock(10,1)};
+    const recoveryPreview=await previewWebhookRecovery(recoveryOptions);
+    await confirmWebhookRecovery({...recoveryOptions,previewId:recoveryPreview.preview_id,receipt:recoveryPreview.receipt});
     assert.equal((await dispatch(clock(10,61))).processed,1);
     const attempts=received.filter(entry=>entry.path==="/comparison");
     assert.equal(attempts.length,2); assert.equal(attempts[0].deliveryId,attempts[1].deliveryId);
@@ -854,8 +940,8 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     const installationId = `installation:webhook-deletion:${run}`, unsentId = `installation:webhook-never-sent:${run}`;
     const submittedId = `event:webhook-before-deletion:${run}`;
     const at = (seconds = 0) => new Date(Date.now() + 1000 + seconds * 1000);
-    const dispatch = (now: Date) => processOperatorWebhookDeliveries(pool, payloadStore, tenantId, {
-      enabled: true, destinationAllowlist: [receiverOrigin], allowSyntheticLoopback: true, now: () => now });
+    const dispatch = (now: Date, maximumAttempts = 8) => processOperatorWebhookDeliveries(pool, payloadStore, tenantId, {
+      enabled: true, destinationAllowlist: [receiverOrigin], allowSyntheticLoopback: true, now: () => now, maximumAttempts });
     assert.equal((await submit(submittedId, installationId)).status, 202);
     assert.equal((await submit(`event:webhook-other-app:${run}`, installationId,
       { appId: otherAppId, serverKeyId: otherKey.server_key_id, serverSecret: otherKey.server_key })).status, 202);
@@ -915,11 +1001,16 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
       assert.equal(originalBody.includes(Buffer.from(forbidden)), false, forbidden);
     }
     deletionStatuses = [503, 204];
-    await dispatch(at(4));
+    await dispatch(at(4), 1);
     const afterFailedNotice = received.filter(entry => entry.path === "/deletion");
     assert.equal(afterFailedNotice.length, 2, "no pending subject event crosses deletion recognition");
     assert.equal((await withTenant(pool, tenantId, async client => (await client.query<{ state: string }>(
-      "SELECT state FROM ephemeral.operator_webhook_deliveries WHERE tenant_id=$1 AND delivery_id=$2", [tenantId, notice.delivery_id])).rows[0])).state, "retry");
+      "SELECT state FROM ephemeral.operator_webhook_deliveries WHERE tenant_id=$1 AND delivery_id=$2", [tenantId, notice.delivery_id])).rows[0])).state, "failed");
+    const recovery={pool,payloadStore,scope:{tenantId,appId,keyId:"synthetic-deletion-recovery"},deliveryId:notice.delivery_id,now:at(5)};
+    const preview=await previewWebhookRecovery(recovery);
+    await confirmWebhookRecovery({...recovery,previewId:preview.preview_id,receipt:preview.receipt});
+    notice.request_ref=(await withTenant(pool,tenantId,async client=>(await client.query<{request_ref:string}>(
+      "SELECT request_ref FROM ephemeral.operator_webhook_deliveries WHERE tenant_id=$1 AND delivery_id=$2",[tenantId,notice.delivery_id])).rows[0])).request_ref;
 
     // Broader subsequent deletions must not erase an already pending deletion notice.
     let tenantRequestId = "";
@@ -945,7 +1036,7 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     const receipts = await withTenant(pool, tenantId, async client => (await client.query<{ state: string; http_status: number; artifact: Record<string, unknown> }>(
       "SELECT state,http_status,artifact FROM ledger.operator_webhook_delivery_results WHERE tenant_id=$1 AND delivery_id=$2 ORDER BY attempt",
       [tenantId, notice.delivery_id])).rows);
-    assert.deepEqual(receipts.map(row => [row.state, row.http_status]), [["retry", 503], ["succeeded", 204]]);
+    assert.deepEqual(receipts.map(row => [row.state, row.http_status]), [["failed", 503], ["succeeded", 204]]);
     for (const receipt of receipts) assert.equal(Object.hasOwn(receipt.artifact, "deletion_completed"), false,
       "HTTP acceptance is not evidence that the recipient erased anything");
     assert.equal(received.some(entry => entry.path === "/deletion-off" && JSON.parse(entry.body.toString()).schema === "openmasu.subject_deletion.v1"), false);

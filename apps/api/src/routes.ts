@@ -2,6 +2,10 @@ export type RouteAuth = "public" | "admin_bearer" | "sdk_hmac" | "privacy_receip
 export type RouteCapability = "read" | "operate" | "administer";
 
 export type RouteHandler =
+  | "admin_webhook_recovery_preview"
+  | "admin_webhook_recovery_confirm"
+  | "dashboard_webhook_recovery_preview"
+  | "dashboard_webhook_recovery_confirm"
   | "admin_webhook_content_preview"
   | "admin_webhook_content_read"
   | "admin_webhook_content_activate"
@@ -200,6 +204,11 @@ function exactPathPattern(path: string): RegExp {
 }
 
 export const routes: readonly RouteDefinition[] = [
+  // Preview records a non-secret audit receipt, so both operations use the writer role.
+  { handler: "admin_webhook_recovery_preview", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhook-deliveries\/[^/]+\/recovery-preview$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "admin_webhook_recovery_confirm", method: "POST", pattern: /^\/v1\/admin\/apps\/[^/]+\/operator-webhook-deliveries\/[^/]+\/recovery-confirm$/, auth: "admin_bearer", mutates: true, capability: "administer" },
+  { handler: "dashboard_webhook_recovery_preview", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-webhook-deliveries\/[^/]+\/recovery-preview$/, auth: "dashboard_session", mutates: true, capability: "administer" },
+  { handler: "dashboard_webhook_recovery_confirm", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/operator-webhook-deliveries\/[^/]+\/recovery-confirm$/, auth: "dashboard_session", mutates: true, capability: "administer" },
   { handler: "dashboard_imports_list", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/imports$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_imports_read", method: "GET", pattern: /^\/dashboard\/apps\/[^/]+\/imports\/[^/]+$/, auth: "dashboard_session", mutates: false, capability: "read" },
   { handler: "dashboard_imports_upload", method: "POST", pattern: /^\/dashboard\/apps\/[^/]+\/imports$/, auth: "dashboard_session", mutates: true, capability: "operate" },

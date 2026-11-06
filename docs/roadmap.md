@@ -40,7 +40,7 @@ ownership. Completion refers to their declared synthetic scope.
 | Verified commerce lifecycle | Native verified purchase/refund/reversal and financial projections |
 | Import and financial compatibility | Explicit mappings, exact money, backfill cutoffs and bounded import throughput |
 | Authenticated backend events | Dedicated server credentials and ordinary durable ingestion |
-| Operator event webhooks | Encrypted outbox, exact-body signing, bounded retries, signing-key rotation with stable references and opt-in deletion notices |
+| Operator event webhooks | Encrypted outbox, exact-body signing, bounded retries, signing-key rotation with stable references, opt-in deletion notices and digest-verified confirmation of recoverable terminal failures |
 | Operator-owned bulk event exports | Deterministic NDJSON batches, S3-compatible delivery and keyset checkpoints |
 
 ## Completed milestone: integration and release coherence

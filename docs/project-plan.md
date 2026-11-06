@@ -65,6 +65,10 @@ An explicit destination opt-in adds deletion notices for subjects with recorded
 successful event delivery, using that same outbox and stable reference. Local
 privacy completion never waits for the recipient; HTTP acceptance is not evidence
 that the recipient has erased its copy.
+Failed webhooks can be recovered through an audited preview and explicit
+confirmation only when retained evidence reconstructs the original digest.
+This reuses the same delivery identity, policy, signing revision and attempt
+history; unavailable evidence, deletion, expiry and active dispatch refuse recovery.
 
 ## Implemented integration work
 
