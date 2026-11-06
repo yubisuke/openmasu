@@ -8,6 +8,7 @@ import { once } from "node:events";
 import { spawn } from "node:child_process";
 import { after, before, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
+import type { PoolClient } from "pg";
 import {
   appendDurableBatch,
   createAppPool,
@@ -42,6 +43,8 @@ import { ensureSdkKeys, installationIdDigest, signSdkRequest } from "./sdk-auth.
 import { createTrackingLink } from "./tracking-links.js";
 import { SDK_INSTALLATION_PRIVACY_PATH } from "./routes.js";
 import { handleDevicePrivacyStatus } from "./sdk-routes.js";
+import { generateDsarResponse } from "./dsar.js";
+import { dsarLimits } from "./dsar-pagination.js";
 import { verifyCompactJws } from "@openmasu/commerce-lifecycle";
 import { nonFraudBundleHash } from "@openmasu/contracts";
 import { createSyntheticValidation, closeSyntheticValidation, syntheticValidationStatus } from "./synthetic-validations.js";
@@ -3137,6 +3140,91 @@ describe("M2a signed SDK ingestion", () => {
       { outcome: "succeeded", reason_code: null },
       { outcome: "failed", reason_code: "installation_scope_mismatch" },
     ]);
+  });
+
+  it("pages a fixed portable set without omissions and refuses expired, altered, deleted or revoked continuations", async () => {
+    const subject=`installation:portable-pages:${run}`;
+    const enrolled=await signed("/v1/installations",{installation_id:subject});
+    assert.equal(enrolled.status,201);
+    const credential=await enrolled.json() as {installation_key_id:string;installation_secret:string};
+    const send=(path:string,body:unknown)=>signed(path,body,{installationKeyId:credential.installation_key_id,secret:credential.installation_secret});
+    for(let offset=0;offset<250;offset+=50) {
+      const records=Array.from({length:50},(_,i)=>sourceEvent(`event:portable-pages:${run}:${offset+i}`,"session_start",
+        {installation_id:subject,session_id:`session:portable-pages:${offset+i}`}));
+      assert.equal((await send("/v1/events/batch",{records})).status,202);
+    }
+    await processSdkInbox(pool,payloadStore,tenantId);
+    const subjectDigest=createHash("sha256").update(`${tenantId}\0${appId}\0${subject}`).digest("hex");
+    const addCommerce=()=>recordCommerceNotification({pool,payloadStore,tenantId,appId,
+      payload:Buffer.from('{"synthetic":"portable-pages"}'),notificationDigest:randomBytes(32).toString("hex"),subjectDigest,
+      event:{provider:"google_play",eventKind:"subscription_renewed",subscriptionState:"active",financialEffect:"none",
+        externalEventDigest:randomBytes(32).toString("hex"),effectiveAt:"2026-08-19T01:00:00.000Z"},
+      receivedAt:new Date("2026-08-20T00:00:00.000Z")});
+    await addCommerce(); await addCommerce();
+    const addAttribution=(client:PoolClient,suffix:string)=>client.query(`INSERT INTO ledger.attribution_results
+      (attribution_id,tenant_id,app_id,subject_scope,subject_ref,effective_at,decided_at,status,method,model,reason_code,artifact)
+      VALUES($1,$2,$3,'installation',$4,$5,$5,'organic','none','last_touch','no_eligible_touch','{}'::jsonb)`,
+      [`attribution:portable:${run}:${suffix}`,tenantId,appId,subject,"2026-08-19T01:00:00.000Z"]);
+    await withTenant(pool,tenantId,async client=>{await addAttribution(client,"one");await addAttribution(client,"two");});
+    const legacy=await send("/v1/privacy/access",{installation_id:subject,request_type:"portability"});
+    assert.equal(legacy.status,409);assert.equal((await legacy.json()).error,"dsar_pagination_required");
+    const request={installation_id:subject,request_type:"portability",pagination:"cursor_v1",page_size:37};
+    const page=async(cursor?:string)=>{
+      const response=await send("/v1/privacy/access",{...request,...(cursor?{cursor}:{})});
+      const text=await response.text();assert.equal(response.status,200,text);
+      assert.ok(Buffer.byteLength(text)<=dsarLimits.bytes);
+      const value=JSON.parse(text);assert.ok(value.returned_count<=37);return value;
+    };
+    // A backdated transaction already in flight at the first page must never join later pages.
+    const pending=await pool.connect();
+    let first:Record<string,any>;
+    try {
+      await pending.query("BEGIN");await pending.query("SELECT set_config('openmasu.tenant_id',$1,true)",[tenantId]);
+      await addAttribution(pending,"in-flight");
+      first=await page();
+      assert.equal(first.complete,false);assert.equal(typeof first.next_cursor,"string");
+      await pending.query("COMMIT");
+    } finally {await pending.query("ROLLBACK");pending.release();}
+    await addCommerce(); // Deliberately backdated recorded_at, committed after cutoff.
+    assert.equal((await send("/v1/events/batch",{records:[sourceEvent(`event:portable-new:${run}`,"session_start",
+      {installation_id:subject,session_id:"session:portable-new"})]})).status,202);
+    await processSdkInbox(pool,payloadStore,tenantId);
+    const collected={records:[...first!.records],attributions:[...first!.attributions],verified_commerce_lifecycle:[...first!.verified_commerce_lifecycle]};
+    let current=first!,pages=1;
+    while(!current.complete) {
+      assert.ok(pages++<20);assert.equal(typeof current.next_cursor,"string");
+      current=await page(current.next_cursor);
+      assert.equal(current.request_id,first!.request_id);assert.equal(current.cutoff_at,first!.cutoff_at);
+      for(const name of ["records","attributions","verified_commerce_lifecycle"] as const) collected[name].push(...current[name]);
+    }
+    assert.equal(current.next_cursor,null);
+    assert.equal(collected.records.length,250);assert.equal(collected.attributions.length,2);assert.equal(collected.verified_commerce_lifecycle.length,2);
+    assert.equal(new Set(collected.records.map(value=>value.record_ref)).size,250);
+    assert.equal(new Set(collected.attributions.map(value=>value.attribution_ref)).size,2);
+    assert.equal(new Set(collected.verified_commerce_lifecycle.map(value=>value.lifecycle_ref)).size,2);
+    const replay=await page(first!.next_cursor);
+    assert.deepEqual(replay.records,collected.records.slice(37,74));
+    assert.equal((await send("/v1/privacy/access",{...request,cursor:`!${first!.next_cursor.slice(1)}`})).status,400);
+    assert.equal((await send("/v1/privacy/access",{...request,request_type:"access",cursor:first!.next_cursor})).status,400);
+    const direct={pool,tenantId,appId,installationId:subject,requestType:"portability" as const,pagination:"cursor_v1" as const,
+      installationKeyId:credential.installation_key_id,sdkKeyId,installationDigest:installationIdDigest(authConfig,subject),
+      cursorSecret:digestKey,cursor:first!.next_cursor};
+    await assert.rejects(generateDsarResponse({...direct,now:new Date(Date.parse(first!.cutoff_at)+dsarLimits.ttlMs+1)}),/cursor_expired/);
+    const deleted=await send(SDK_INSTALLATION_PRIVACY_PATH,{installation_id:subject});
+    assert.ok([201,202].includes(deleted.status),await deleted.text());
+    assert.equal((await send("/v1/privacy/access",{...request,cursor:first!.next_cursor})).status,401);
+    await assert.rejects(generateDsarResponse(direct),/credential_inactive/);
+
+    const revokedSubject=`installation:portable-revoked:${run}`;
+    const rev=await signed("/v1/installations",{installation_id:revokedSubject});
+    assert.equal(rev.status,201);const revCredential=await rev.json() as {installation_key_id:string;installation_secret:string};
+    const revScope={...direct,installationId:revokedSubject,installationKeyId:revCredential.installation_key_id,
+      installationDigest:installationIdDigest(authConfig,revokedSubject)};
+    await assert.rejects(generateDsarResponse(revScope),/cursor_invalid/,"a different authorized installation cannot reuse the cursor");
+    await withTenant(pool,tenantId,c=>c.query(`INSERT INTO control.installation_credential_states
+      (installation_key_id,tenant_id,app_id,status,changed_at,reason_code,artifact)
+      VALUES($1,$2,$3,'revoked',$4,'synthetic_revocation','{}')`,[revCredential.installation_key_id,tenantId,appId,new Date().toISOString()]));
+    await assert.rejects(generateDsarResponse({...revScope,cursor:undefined}),/credential_inactive/);
   });
 
   it("authorises on-device deletion only for the credential's own installation", async () => {

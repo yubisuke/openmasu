@@ -70,6 +70,10 @@ confirmation only when retained evidence reconstructs the original digest.
 This reuses the same delivery identity, policy, signing revision and attempt
 history; unavailable evidence, deletion, expiry and active dispatch refuse recovery.
 
+Installation access/portability now has [bounded fixed-set pages](operations/portable-export.md)
+with explicit completion, cursor expiry and per-page authorization/privacy checks.
+Legacy oversized responses require opt-in rather than returning partial history.
+
 ## Implemented integration work
 
 The earlier integration plan and structural preparation are complete.

@@ -158,6 +158,11 @@ needed if the receipt expires after recognition. Do not log receipt request bodi
 
 ### Data-subject operations
 
+[Bounded portable export](operations/portable-export.md) provides fixed-cutoff,
+credential-bound keyset pages (up to 500 rows / 256 KiB). Continuation expires
+after one hour and is invalidated by privacy changes or credential revocation.
+Legacy oversized requests fail explicitly rather than silently truncating.
+
 - An enrolled installation may sign an access or portability request for its
   own installation only.
 - Native SDK installation reset sends its credential-bound deletion to
