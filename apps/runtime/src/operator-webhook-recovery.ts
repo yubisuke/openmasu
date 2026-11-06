@@ -59,7 +59,7 @@ async function originalBody(client: PoolClient, options: Options, row: Row, now:
   if (row.comparison_id) {
     if (!await comparisonNotificationEligible(client, scope, row.delivery_id, now)) refuse("evidence_unavailable");
     const evidence = (await client.query<{ run_id: string; target_date: string; state: ComparisonNotificationState; previous: ComparisonNotificationState | null }>(
-      `SELECT run.run_id,run.target_date,q.comparison_state AS state,
+      `SELECT run.run_id,run.target_date::text,q.comparison_state AS state,
         (SELECT prior.comparison_state FROM ephemeral.operator_webhook_deliveries prior
           WHERE prior.tenant_id=q.tenant_id AND prior.app_id=q.app_id AND prior.comparison_id=q.comparison_id
             AND prior.destination_id=q.destination_id AND prior.comparison_sequence=q.comparison_sequence-1 LIMIT 1) AS previous
@@ -77,16 +77,22 @@ async function originalBody(client: PoolClient, options: Options, row: Row, now:
     body = buildOperatorWebhookDeletionRequest({ deliveryId: row.delivery_id, appId: scope.appId,
       subjectRef: row.subject_ref, recognizedAt: recognized, endpointUrl: "" }).body;
   } else {
-    const raw = (await client.query<{ raw_payload_ref: string }>(`SELECT raw.raw_payload_ref FROM ledger.raw_records_current raw
+    const raw = (await client.query<{ payload_ref: string | null }>(`SELECT CASE WHEN raw.raw_payload_ref LIKE 'encrypted:%'
+        THEN raw.raw_payload_ref ELSE (
+          SELECT batch.body_ref FROM ledger.ingest_batch_records member
+          JOIN ledger.ingest_batches_current batch USING (tenant_id,app_id,ingest_batch_id)
+          WHERE member.tenant_id=raw.tenant_id AND member.app_id=raw.app_id AND member.record_id=raw.record_id
+            AND batch.status='processed' ORDER BY batch.received_at,batch.ingest_batch_id LIMIT 1
+        ) END AS payload_ref FROM ledger.raw_records_current raw
       JOIN ledger.logical_events logical ON logical.tenant_id=raw.tenant_id AND logical.app_id=raw.app_id AND logical.record_id=raw.record_id
       WHERE raw.tenant_id=$1 AND raw.app_id=$2 AND raw.record_id=$3 AND logical.logical_event_id=$4
         AND logical.record_lifecycle='active' AND raw.payload_lifecycle_status='available'
         AND raw.withdrawal_recognized_at IS NULL AND raw.consent_decision_reason_code<>'consent_withdrawn'
         AND NOT EXISTS(SELECT 1 FROM ledger.privacy_tombstones t WHERE t.tenant_id=raw.tenant_id AND t.app_id=raw.app_id AND t.record_id=raw.record_id)`,
       [scope.tenantId,scope.appId,row.record_id,row.logical_event_id])).rows[0];
-    if (!raw) refuse("evidence_unavailable");
+    if (!raw?.payload_ref) refuse("evidence_unavailable");
     // Do not reconstruct from facts after the protected source has expired/disappeared.
-    try { await payloadStore.read(raw.raw_payload_ref); } catch { refuse("evidence_unavailable"); }
+    try { await payloadStore.read(raw.payload_ref); } catch { refuse("evidence_unavailable"); }
     const candidate = (await client.query<OperatorWebhookCandidate>(`${webhookCandidateSelect}
       WHERE destination.tenant_id=$1 AND destination.app_id=$3 AND destination.destination_id=$4 AND logical.logical_event_id=$5`,
       [scope.tenantId,row.policy_revision ?? 0,scope.appId,row.destination_id,row.logical_event_id])).rows[0];
@@ -142,8 +148,8 @@ export async function confirmWebhookRecovery(options: Options & { previewId: str
       // A late dispatch cleanup still targets only the old object, never this new one.
       await options.payloadStore.purge(row.request_ref);
       written = await options.payloadStore.write({ ...scope, objectId: `webhook-recovery-${row.delivery_id}` },body);
-      await client.query(`UPDATE ephemeral.operator_webhook_deliveries SET request_ref=$4,state='retry',next_attempt_at=$5,
-        updated_at=$5,safe_reason='operator_recovery_requested' WHERE tenant_id=$1 AND app_id=$2 AND delivery_id=$3`,
+      await client.query(`UPDATE ephemeral.operator_webhook_deliveries SET request_ref=$4,state='retry',next_attempt_at=$5::text::timestamptz,
+        updated_at=$5::text,safe_reason='operator_recovery_requested' WHERE tenant_id=$1 AND app_id=$2 AND delivery_id=$3`,
         [scope.tenantId,scope.appId,row.delivery_id,written,now.toISOString()]);
       await audit(client,scope,row,"operator_webhook_recovery_confirmed",options.receipt,now);
       return { delivery_id: row.delivery_id, status: "requested" };

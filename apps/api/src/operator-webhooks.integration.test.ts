@@ -355,8 +355,10 @@ describe("provider-neutral operator event webhooks", { concurrency: false }, () 
     const denied=await confirm(pending.delivery_id,checks); assert.equal(denied.status,409);
     assert.equal((await denied.json()).error,"webhook_recovery_evidence_unavailable");
     const expired=await failed("retention");
-    const raw=await withTenant(pool,tenantId,async c=>(await c.query<{raw_payload_ref:string}>("SELECT raw_payload_ref FROM ledger.raw_records WHERE tenant_id=$1 AND record_id=$2",[tenantId,expired.record_id])).rows[0]);
-    await payloadStore.purge(raw.raw_payload_ref);
+    const raw=await withTenant(pool,tenantId,async c=>(await c.query<{body_ref:string}>(`SELECT batch.body_ref
+      FROM ledger.ingest_batch_records member JOIN ledger.ingest_batches_current batch USING(tenant_id,app_id,ingest_batch_id)
+      WHERE member.tenant_id=$1 AND member.app_id=$2 AND member.record_id=$3`,[tenantId,appId,expired.record_id])).rows[0]);
+    await payloadStore.purge(raw.body_ref);
     await assert.rejects(previewWebhookRecovery({...options,deliveryId:expired.delivery_id}),/evidence_unavailable/);
     const keyExpired=await failed("key");
     await rotateOperatorWebhookSigningKey({pool,payloadStore,identity:{tenantId,appId,keyId:"synthetic-recovery",role:"admin"},
