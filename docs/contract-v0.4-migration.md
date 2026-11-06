@@ -15,8 +15,20 @@ and `consent_revision_unconfirmed` (consent/rejection reason).
 No existing artifact changes meaning: absent optional fields retain the old
 policy, existing schema URNs stay `:v0.4`, and wire/package versions stay
 `0.4.0`. Neither a client grant nor a reset can override server authorization
-or privacy-deletion fences. This contract stage does not by itself ship the
-runtime projection or purpose-selective SDK queue APIs.
+or privacy-deletion fences. Purpose-selective native SDK queue APIs are still
+pending; accepting the contract fields is not evidence of native SDK support.
+
+Migration `103_purpose_consent_controls.sql` adds the installation-scoped,
+append-only runtime projection. Existing durable withdrawals migrate as legacy
+stops, never as inferred grants. The SDK inbox admits canonical controls with
+their projection and batch membership in one transaction before evaluating
+measurements. Reads use each measurement's authoritative receipt sequence and
+the highest applicable revision, not historical encrypted bodies. Conflicting
+states at one revision fail closed. A control cannot displace a measurement
+that already owns its producer-scoped event ID. Deleted-credential fences remain
+independent of regrant. Provider-originated commerce without an enqueue-time
+consent revision retains its conservative existing withdrawal fence; SDK regrant
+does not revive those older provider bindings or queued events.
 
 All thirteen new golden files are enumerated with counts, the independent
 admission table and payload digest derivations in

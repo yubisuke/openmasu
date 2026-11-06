@@ -4,8 +4,24 @@ import { describe, it } from "node:test";
 import type { CandidateAttempt } from "@openmasu/attribution-core";
 import { schemaInvalidArtifacts } from "./admission.js";
 import { acquisitionDimensions, platformInstallEvidence } from "./fact-projections.js";
+import { canonicalConsentAttempts } from "../purpose-consent.js";
 
 describe("ingestion admission and shared projection boundaries", () => {
+  it("pre-admits only schema-valid canonical consent controls without stealing measurement event IDs", () => {
+    const input = JSON.parse(readFileSync("fixtures/v0.4/81-purpose-consent/input.json", "utf8"));
+    const control: CandidateAttempt = {server:input.server_context,record:input.records[0],batch_id:"synthetic-consent"};
+    const measurement: CandidateAttempt = { ...control,record:{...input.records.find((value: Record<string,unknown>) => value.event_name === "session_start"),
+      event_id:control.record.event_id,received_at:"2026-11-01T00:00:00.000Z"} };
+    assert.deepEqual(canonicalConsentAttempts([control],[]),[control]);
+    assert.deepEqual(canonicalConsentAttempts([control,measurement],[]),[]);
+    assert.deepEqual(canonicalConsentAttempts([measurement,control],[]),[]);
+    assert.deepEqual(canonicalConsentAttempts([control],[measurement]),[]);
+    const collision = {...measurement,record:{...measurement.record,record_id:control.record.record_id,event_id:"event:other"}};
+    assert.deepEqual(canonicalConsentAttempts([control,collision],[]),[]);
+    const invalid = {...control,record:{...control.record,payload:{...control.record.payload,consent_revision:-1}}};
+    assert.deepEqual(canonicalConsentAttempts([invalid],[]),[]);
+  });
+
   it("rejects an invalid payload using only the existing non-identifying metadata", () => {
     const input = JSON.parse(readFileSync("fixtures/v0.4/52-bounded-edge-evidence/input.json", "utf8"));
     const attempt: CandidateAttempt = { server: input.server_context, record: input.records[0], batch_id: "synthetic-admission" };
